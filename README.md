@@ -7,13 +7,13 @@ Il n'y a pas besoin de créer un fichier "requirements.txt" comme en Python, car
 Voici les étapes exactes à suivre pour ton pote :
 
 ## 1. Prérequis
-Il doit absolument avoir **Node.js** installé sur sa machine.
-- S'il ne l'a pas, il peut le télécharger et l'installer depuis le site officiel : [https://nodejs.org/](https://nodejs.org/) (prendre la version LTS).
+Il faut absolument avoir **Node.js** installé sur la machine.
+- S'il ne l'a pas, vous poiuvez le télécharger et l'installer depuis le site officiel : [https://nodejs.org/](https://nodejs.org/) (prendre la version LTS).
 
 ## 2. Installation des dépendances ("requirements")
-Une fois le projet récupéré et Node.js installé, il doit ouvrir un terminal (Invite de commandes, PowerShell ou le terminal de VS Code) et se placer dans le dossier du projet (`SupplyGame-React`).
+Une fois le projet récupéré et Node.js installé, vous deviez ouvrir un terminal (Invite de commandes, PowerShell ou le terminal de VS Code) et se placer dans le dossier du projet (`SupplyGame-React`).
 
-Ensuite, il doit taper cette commande pour installer toutes les bibliothèques nécessaires (React, Tailwind, Three.js, Zustand, etc.) :
+Ensuite, vous deviez taper cette commande pour installer toutes les bibliothèques nécessaires (React, Tailwind, Three.js, Zustand, etc.) :
 ```bash
 npm install
 ```
