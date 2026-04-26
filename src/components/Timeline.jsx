@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import useGameStore from '../store/useGameStore';
 
-const WEEK_DURATION_MS = 10_000; // 10 seconds per week
+const WEEK_DURATION_MS = 250; // 0.25 seconds per week
 
 export default function Timeline() {
   const { currentWeek, isPaused, setIsPaused, setLastWeekTime, lastWeekTime, advanceWeek, goBackWeek } =
@@ -31,9 +31,20 @@ export default function Timeline() {
         }
 
         if (elapsed >= WEEK_DURATION_MS) {
-          startTime = now;
-          setLastWeekTime(now);
-          advanceWeek();
+          if (currentWeek >= 100) {
+            setIsPaused(true);
+            // Reset visuals to start state
+            if (progressRef.current) progressRef.current.style.setProperty('--progress', '0%');
+            if (circleRef.current) circleRef.current.style.strokeDashoffset = '0';
+            
+            // Return to Period 1
+            for (let i = 0; i < currentWeek - 1; i++) goBackWeek();
+            setLastWeekTime(0);
+          } else {
+            startTime = now;
+            setLastWeekTime(now);
+            advanceWeek();
+          }
         }
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -41,7 +52,7 @@ export default function Timeline() {
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [isPaused, advanceWeek, setLastWeekTime]);
+  }, [isPaused, currentWeek, advanceWeek, goBackWeek, setIsPaused, setLastWeekTime]);
 
   const handleScrub = (e) => {
     const target = parseInt(e.target.value, 10);
