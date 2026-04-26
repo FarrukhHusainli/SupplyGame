@@ -65,8 +65,8 @@ export default function Timeline() {
         borderRadius: 40,
         border: '1px solid rgba(59,130,246,0.18)',
         boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
-        minWidth: 360,
-        maxWidth: '55vw',
+        minWidth: 680,
+        maxWidth: '85vw',
       }}
     >
       {/* Step Back Button */}
@@ -161,7 +161,7 @@ export default function Timeline() {
       </button>
 
       {/* Timeline slider */}
-      <div className="flex-1 flex items-center" ref={progressRef}>
+      <div className="flex-1 flex flex-col justify-center relative pt-1" ref={progressRef}>
         <input
           type="range"
           min={1}
@@ -178,6 +178,15 @@ export default function Timeline() {
             cursor: 'pointer',
           }}
         />
+        {/* Period number grid markers */}
+        <div className="flex justify-between mt-1 px-1 pointer-events-none">
+          {[1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((num) => (
+            <div key={num} className="flex flex-col items-center">
+              <div className="w-px h-1 bg-blue-500/20" />
+              <span className="text-[0.55rem] text-slate-500 font-mono mt-0.5">{num}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
