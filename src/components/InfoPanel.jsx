@@ -95,7 +95,11 @@ function WarehousePanel({ name }) {
               <DataRow key={p} week={w} isPast={isPast} isCurrent={isCurrent} columns="28px 1fr 1fr"
                 cells={<>
                   <span className="val-neu text-right">{fmt(isPast ? h.req : proj.required?.[p])}</span>
-                  <span className="val-recv text-right">{fmt(isPast ? h.recv : proj.inbound?.[p])}</span>
+                  <span className={`text-right ${
+                    (isPast ? h.recv : proj.inbound?.[p]) >= (isPast ? h.req : proj.required?.[p])
+                      ? 'val-pos'
+                      : 'val-neg'
+                  }`}>{fmt(isPast ? h.recv : proj.inbound?.[p])}</span>
                 </>}
               />
             );
