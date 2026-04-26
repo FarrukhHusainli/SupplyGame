@@ -1,15 +1,23 @@
 import { useEffect, useRef } from 'react';
 import useGameStore from '../store/useGameStore';
 
-const WEEK_DURATION_MS = 250; // 0.25 seconds per week
+const WEEK_DURATION_MS = 100; // 0.1 seconds per week
 
 export default function Timeline() {
-  const { currentWeek, isPaused, setIsPaused, setLastWeekTime, lastWeekTime, advanceWeek, goBackWeek } =
-    useGameStore();
+  const {
+    currentWeek,
+    timelineLength,
+    setTimelineLength,
+    isPaused,
+    setIsPaused,
+    setLastWeekTime,
+    lastWeekTime,
+    advanceWeek,
+    goBackWeek,
+  } = useGameStore();
 
   const rafRef = useRef(null);
   const progressRef = useRef(null);
-  const circleRef = useRef(null);
 
   useEffect(() => {
     let startTime = lastWeekTime || performance.now();
@@ -23,19 +31,11 @@ export default function Timeline() {
           progressRef.current.style.setProperty('--progress', `${ratio * 100}%`);
         }
 
-        if (circleRef.current) {
-          const r = circleRef.current.r.baseVal.value;
-          const circumference = 2 * Math.PI * r;
-          circleRef.current.style.strokeDasharray = `${circumference}`;
-          circleRef.current.style.strokeDashoffset = `${ratio * circumference}`;
-        }
-
         if (elapsed >= WEEK_DURATION_MS) {
-          if (currentWeek >= 100) {
+          if (currentWeek >= timelineLength) {
             setIsPaused(true);
             // Reset visuals to start state
             if (progressRef.current) progressRef.current.style.setProperty('--progress', '0%');
-            if (circleRef.current) circleRef.current.style.strokeDashoffset = '0';
             
             // Return to Period 1
             for (let i = 0; i < currentWeek - 1; i++) goBackWeek();
@@ -52,7 +52,7 @@ export default function Timeline() {
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [isPaused, currentWeek, advanceWeek, goBackWeek, setIsPaused, setLastWeekTime]);
+  }, [isPaused, currentWeek, timelineLength, advanceWeek, goBackWeek, setIsPaused, setLastWeekTime]);
 
   const handleScrub = (e) => {
     const target = parseInt(e.target.value, 10);
@@ -107,23 +107,6 @@ export default function Timeline() {
           W {currentWeek}
         </div>
 
-        {/* SVG ring */}
-        <svg
-          className="absolute inset-0"
-          width="44" height="44"
-          style={{ transform: 'rotate(-90deg)', pointerEvents: 'none' }}
-        >
-          <circle cx="22" cy="22" r="19" stroke="rgba(59,130,246,0.15)" strokeWidth="2" fill="none" />
-          <circle
-            ref={circleRef}
-            cx="22" cy="22" r="19"
-            stroke={isPaused ? 'rgba(59,130,246,0.3)' : '#3b82f6'}
-            strokeWidth="2"
-            fill="none"
-            strokeLinecap="round"
-          />
-        </svg>
-
         {/* Button */}
         <button
           onClick={() => setIsPaused(!isPaused)}
@@ -176,14 +159,14 @@ export default function Timeline() {
         <input
           type="range"
           min={1}
-          max={100}
+          max={timelineLength}
           value={currentWeek}
           onChange={handleScrub}
           className="w-full"
           style={{
             appearance: 'none',
             height: 2,
-            background: `linear-gradient(to right, #3b82f6 ${((currentWeek - 1) / 99) * 100}%, rgba(99,102,241,0.2) ${((currentWeek - 1) / 99) * 100}%)`,
+            background: `linear-gradient(to right, #3b82f6 ${((currentWeek - 1) / (timelineLength - 1 || 1)) * 100}%, rgba(99,102,241,0.2) ${((currentWeek - 1) / (timelineLength - 1 || 1)) * 100}%)`,
             borderRadius: 2,
             outline: 'none',
             cursor: 'pointer',
@@ -191,13 +174,29 @@ export default function Timeline() {
         />
         {/* Period number grid markers */}
         <div className="flex justify-between mt-1 px-1 pointer-events-none">
-          {[1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((num) => (
-            <div key={num} className="flex flex-col items-center">
-              <div className="w-px h-1 bg-blue-500/20" />
-              <span className="text-[0.55rem] text-slate-500 font-mono mt-0.5">{num}</span>
-            </div>
-          ))}
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+            const num = Math.max(1, Math.round(ratio * timelineLength));
+            return (
+              <div key={ratio} className="flex flex-col items-center">
+                <div className="w-px h-1 bg-blue-500/20" />
+                <span className="text-[0.55rem] text-slate-500 font-mono mt-0.5">{num}</span>
+              </div>
+            );
+          })}
         </div>
+      </div>
+
+      {/* Timeline Length Adjustment */}
+      <div className="flex flex-col items-center gap-1 border-l border-white/10 pl-4 ml-2">
+        <span className="text-[0.5rem] font-bold text-slate-500 uppercase tracking-tighter">Max Weeks</span>
+        <input
+          type="number"
+          min="1"
+          max="999"
+          value={timelineLength}
+          onChange={(e) => setTimelineLength(e.target.value)}
+          className="w-12 bg-slate-900/50 border border-blue-500/30 rounded text-center text-xs font-mono text-blue-400 focus:outline-none focus:border-blue-500"
+        />
       </div>
     </div>
   );

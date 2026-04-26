@@ -17,6 +17,7 @@ const useGameStore = create((set, get) => ({
 
   // ── Time ───────────────────────────────────────────────
   currentWeek: 1,
+  timelineLength: 100,
   isPaused: false,
   lastWeekTime: 0,
 
@@ -92,6 +93,13 @@ const useGameStore = create((set, get) => ({
   // ── Time controls ────────────────────────────────────────
   setIsPaused: (isPaused) => set({ isPaused }),
   setLastWeekTime: (t) => set({ lastWeekTime: t }),
+  setTimelineLength: (length) => {
+    const val = Math.max(1, parseInt(length) || 1);
+    set((s) => ({
+      timelineLength: val,
+      currentWeek: s.currentWeek > val ? val : s.currentWeek,
+    }));
+  },
 
   advanceWeek: () => {
     const s = get();
