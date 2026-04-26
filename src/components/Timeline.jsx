@@ -69,6 +69,23 @@ export default function Timeline() {
         maxWidth: '55vw',
       }}
     >
+      {/* Step Back Button */}
+      <button
+        onClick={goBackWeek}
+        disabled={currentWeek <= 1}
+        className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-all hover:bg-blue-500/20 active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
+        style={{
+          background: 'rgba(30,41,59,0.5)',
+          color: '#60a5fa',
+          border: '1px solid rgba(59,130,246,0.2)',
+          fontSize: '0.9rem',
+          cursor: 'pointer',
+        }}
+        title="Previous Week"
+      >
+        ⏮
+      </button>
+
       {/* Play/Pause button with ring */}
       <div className="relative flex-shrink-0" style={{ width: 44, height: 44 }}>
         {/* Week label above */}
@@ -126,6 +143,22 @@ export default function Timeline() {
           {isPaused ? 'PAUSED' : 'LIVE'}
         </div>
       </div>
+
+      {/* Step Forward Button */}
+      <button
+        onClick={advanceWeek}
+        className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-all hover:bg-blue-500/20 active:scale-90"
+        style={{
+          background: 'rgba(30,41,59,0.5)',
+          color: '#60a5fa',
+          border: '1px solid rgba(59,130,246,0.2)',
+          fontSize: '0.9rem',
+          cursor: 'pointer',
+        }}
+        title="Next Week"
+      >
+        ⏭
+      </button>
 
       {/* Timeline slider */}
       <div className="flex-1 flex items-center" ref={progressRef}>
