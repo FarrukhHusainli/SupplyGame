@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import useUIStore from '../store/useUIStore';
+import useGameStore from '../store/useGameStore';
 
 /**
  * A pipe connection between two nodes: tube geometry + directional arrow.
@@ -10,10 +11,11 @@ import useUIStore from '../store/useUIStore';
 export default function PipeConnection({ pipe, fromPos, toPos }) {
   const pipeRef = useRef();
   const arrowRef = useRef();
+  const { warehouses, pipes } = useGameStore();
   const { selectedId, selectedType, select, clearSelection } = useUIStore();
   const isSelected = selectedId === pipe.id && selectedType === 'pipe';
 
-  const { curve, tubeGeom, arrowPos, arrowQuat, pipeColor } = useMemo(() => {
+  const { curve, tubeGeom, arrowPos, arrowQuat } = useMemo(() => {
     const from = new THREE.Vector3(...fromPos);
     const to = new THREE.Vector3(...toPos);
     const mid = from.clone().add(to).multiplyScalar(0.5).setY(1 + pipe.leadTime);
@@ -34,11 +36,26 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
     const tangent = c.getTangent(0.5);
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent.normalize());
 
-    // Color matches the destination node type
-    const col = new THREE.Color(0x4db8ff);
-
-    return { curve: c, tubeGeom: tGeom, arrowPos: aPos, arrowQuat: q, pipeColor: col };
+    return { curve: c, tubeGeom: tGeom, arrowPos: aPos, arrowQuat: q };
   }, [fromPos, toPos, pipe.leadTime]);
+
+  // Determine color based on inbound status of the "from" node
+  const { color, emissive } = useMemo(() => {
+    const hasInbound = pipes.some((p) => p.to === pipe.from);
+    const sourceNodeId = hasInbound ? pipe.from : pipe.to;
+    const isWarehouse = !!warehouses[sourceNodeId];
+
+    if (isWarehouse) {
+      return {
+        color: isSelected ? 0x00d4ff : 0x4db8ff,
+        emissive: isSelected ? 0x0055aa : 0x0a2240,
+      };
+    }
+    return {
+      color: isSelected ? 0xffdf80 : 0xe8c97a,
+      emissive: isSelected ? 0x5a3a00 : 0x2a1f00,
+    };
+  }, [pipe.from, pipe.to, pipes, warehouses, isSelected]);
 
   // Pulse opacity when selected
   useFrame((state) => {
@@ -55,15 +72,13 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
     else select(pipe.id, 'pipe');
   };
 
-  const color = isSelected ? 0x00d4ff : 0x4db8ff;
-
   return (
     <group>
       {/* Tube */}
       <mesh ref={pipeRef} geometry={tubeGeom} onClick={handleClick}>
         <meshPhongMaterial
           color={color}
-          emissive={isSelected ? 0x003366 : 0x001122}
+          emissive={emissive}
           shininess={20}
           transparent
           opacity={0.35}
