@@ -24,6 +24,10 @@ export default function CameraController() {
     yaw.current = camera.rotation.y;
 
     const onKeyDown = (e) => {
+      // Ignore camera controls if the user is typing in an input field
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+        return;
+      }
       keys.current[e.code] = true;
     };
     const onKeyUp = (e) => {
@@ -52,6 +56,13 @@ export default function CameraController() {
   }, [camera]);
 
   useFrame(() => {
+    // Block camera updates if focus is currently on a text input
+    if (
+      document.activeElement?.tagName === 'INPUT' ||
+      document.activeElement?.tagName === 'TEXTAREA' ||
+      document.activeElement?.isContentEditable
+    ) return;
+
     const k = keys.current;
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
