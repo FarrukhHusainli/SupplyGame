@@ -4,11 +4,25 @@ import * as THREE from 'three';
 import useUIStore from '../store/useUIStore';
 import useGameStore from '../store/useGameStore';
 
+// Color/Animation Constants mapped from Node files
+const THEMES = {
+  warehouse: {
+    default: { col: 0x4db8ff, emi: 0x0a2240, op: 0.75 },
+    selected: { col: 0x00d4ff, emi: 0x0055aa, op: 0.92 },
+    float: { freq: 2, amp: 0.06 }
+  },
+  customer: {
+    default: { col: 0xe8c97a, emi: 0x2a1f00, op: 0.72 },
+    selected: { col: 0xffdf80, emi: 0x5a3a00, op: 0.92 },
+    float: { freq: 2.2, amp: 0.05 }
+  }
+};
+
 /**
  * A pipe connection between two nodes: tube geometry + directional arrow.
- * Matches original look: curved tube with mid-point arrow.
  */
 export default function PipeConnection({ pipe, fromPos, toPos }) {
+  const groupRef = useRef();
   const pipeRef = useRef();
   const arrowRef = useRef();
   const { warehouses, pipes } = useGameStore();
@@ -39,31 +53,40 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
     return { curve: c, tubeGeom: tGeom, arrowPos: aPos, arrowQuat: q };
   }, [fromPos, toPos, pipe.leadTime]);
 
-  // Determine color based on inbound status of the "from" node
-  const { color, emissive } = useMemo(() => {
+  // Determine theme based on inbound status of the "from" node
+  const theme = useMemo(() => {
     const hasInbound = pipes.some((p) => p.to === pipe.from);
     const sourceNodeId = hasInbound ? pipe.from : pipe.to;
-    const isWarehouse = !!warehouses[sourceNodeId];
+    return warehouses[sourceNodeId] ? THEMES.warehouse : THEMES.customer;
+  }, [pipe.from, pipe.to, pipes, warehouses]);
 
-    if (isWarehouse) {
-      return {
-        color: isSelected ? 0x00d4ff : 0x4db8ff,
-        emissive: isSelected ? 0x0055aa : 0x0a2240,
-      };
-    }
-    return {
-      color: isSelected ? 0xffdf80 : 0xe8c97a,
-      emissive: isSelected ? 0x5a3a00 : 0x2a1f00,
-    };
-  }, [pipe.from, pipe.to, pipes, warehouses, isSelected]);
-
-  // Pulse opacity when selected
+  // Match Node behaviors: Floating animation + Color Lerping
   useFrame((state) => {
-    if (!pipeRef.current) return;
-    const base = isSelected ? 0.65 : 0.35;
-    const pulse = isSelected ? Math.sin(state.clock.elapsedTime * 3) * 0.15 : 0;
-    pipeRef.current.material.opacity = base + pulse;
-    if (arrowRef.current) arrowRef.current.material.opacity = (base + pulse) * 1.5;
+    if (!groupRef.current || !pipeRef.current || !arrowRef.current) return;
+    
+    const t = state.clock.elapsedTime;
+    const target = isSelected ? theme.selected : theme.default;
+
+    // 1. Float Animation
+    if (isSelected) {
+      groupRef.current.position.y = Math.sin(t * theme.float.freq) * theme.float.amp + theme.float.amp;
+    } else {
+      groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, 0, 0.1);
+    }
+
+    // 2. Color/Emissive Lerp (Tube)
+    pipeRef.current.material.color.lerp(new THREE.Color(target.col), 0.1);
+    pipeRef.current.material.emissive.lerp(new THREE.Color(target.emi), 0.1);
+    pipeRef.current.material.opacity = THREE.MathUtils.lerp(
+      pipeRef.current.material.opacity, 
+      target.op, 
+      0.1
+    );
+
+    // 3. Sync Arrow
+    arrowRef.current.material.color.copy(pipeRef.current.material.color);
+    arrowRef.current.material.emissive.copy(pipeRef.current.material.emissive);
+    arrowRef.current.material.opacity = pipeRef.current.material.opacity;
   });
 
   const handleClick = (e) => {
@@ -73,15 +96,14 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
   };
 
   return (
-    <group>
+    <group ref={groupRef}>
       {/* Tube */}
       <mesh ref={pipeRef} geometry={tubeGeom} onClick={handleClick}>
         <meshPhongMaterial
-          color={color}
-          emissive={emissive}
+          color={theme.default.col}
+          emissive={theme.default.emi}
           shininess={20}
           transparent
-          opacity={0.35}
         />
       </mesh>
 
@@ -94,10 +116,10 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
       >
         <coneGeometry args={[0.22, 0.55, 16]} />
         <meshPhongMaterial
-          color={color}
+          color={theme.default.col}
+          emissive={theme.default.emi}
           shininess={30}
           transparent
-          opacity={0.85}
         />
       </mesh>
     </group>
