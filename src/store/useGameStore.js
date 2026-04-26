@@ -16,17 +16,18 @@ const useGameStore = create((set, get) => ({
   pipes: [],
 
   // ── Time ───────────────────────────────────────────────
-  currentWeek: 1,
+  currentPeriod: 1,
+  timeBucket: 'Week', // 'Day' | 'Week' | 'Month' | 'Quarter' | 'Year'
   timelineLength: 100,
   isPaused: false,
-  lastWeekTime: 0,
+  lastPeriodTime: 0,
 
   // ── Projection cache (invalidated each week) ────────────
   _projCache: null,
-  lastProjectionWeek: -1,
+  lastProjectionPeriod: -1,
 
   // ── Hydrate from DB ─────────────────────────────────────
-  hydrate: (data) => set({ ...data, _projCache: null, lastProjectionWeek: -1 }),
+  hydrate: (data) => set({ ...data, _projCache: null, lastProjectionPeriod: -1 }),
 
   // ── Node CRUD ───────────────────────────────────────────
   addWarehouse: (name, position, initialStock = 0) => {
@@ -92,42 +93,54 @@ const useGameStore = create((set, get) => ({
 
   // ── Time controls ────────────────────────────────────────
   setIsPaused: (isPaused) => set({ isPaused }),
-  setLastWeekTime: (t) => set({ lastWeekTime: t }),
+  setLastPeriodTime: (t) => set({ lastPeriodTime: t }),
+  setTimeBucket: (timeBucket) => set({ timeBucket }),
   setTimelineLength: (length) => {
     const val = Math.max(1, parseInt(length) || 1);
     set((s) => ({
       timelineLength: val,
-      currentWeek: s.currentWeek > val ? val : s.currentWeek,
+      currentPeriod: s.currentPeriod > val ? val : s.currentPeriod,
     }));
   },
 
-  advanceWeek: () => {
+  advancePeriod: () => {
     const s = get();
-    const next = advanceWeekLogic(s);
-    set({ ...next, _projCache: null, lastProjectionWeek: -1 });
+    const result = advanceWeekLogic(s);
+    // Ensure currentPeriod is updated even if logic returns currentWeek
+    const nextPeriod = result.currentPeriod || result.currentWeek || s.currentPeriod + 1;
+    
+    set({ ...result, currentPeriod: nextPeriod, _projCache: null, lastProjectionPeriod: -1 });
     get()._persist();
   },
 
-  goBackWeek: () => {
+  goBackPeriod: () => {
     const s = get();
-    const prev = goBackWeekLogic(s);
-    set({ ...prev, _projCache: null, lastProjectionWeek: -1 });
+    const result = goBackWeekLogic(s);
+    // Ensure currentPeriod is updated even if logic returns currentWeek
+    const prevPeriod = result.currentPeriod || result.currentWeek || Math.max(1, s.currentPeriod - 1);
+
+    set({ ...result, currentPeriod: prevPeriod, _projCache: null, lastProjectionPeriod: -1 });
     get()._persist();
   },
 
   // ── Projections ──────────────────────────────────────────
   getProjections: () => {
     const s = get();
-    if (s._projCache && s.lastProjectionWeek === s.currentWeek) return s._projCache;
-    const cache = refreshProjections(s.warehouses, s.customers, s.pipes, s.currentWeek);
-    set({ _projCache: cache, lastProjectionWeek: s.currentWeek });
+    if (s._projCache && s.lastProjectionPeriod === s.currentPeriod) return s._projCache;
+    const cache = refreshProjections(s.warehouses, s.customers, s.pipes, s.currentPeriod);
+    set({ _projCache: cache, lastProjectionPeriod: s.currentPeriod });
     return cache;
   },
 
   // ── Persistence ──────────────────────────────────────────
   _persist: () => {
-    const { warehouses, customers, pipes, currentWeek } = get();
-    saveStateToDB({ warehouses, customers, pipes, currentWeek });
+    const state = get();
+    saveStateToDB({ 
+      warehouses: state.warehouses, 
+      customers: state.customers, 
+      pipes: state.pipes, 
+      currentPeriod: state.currentPeriod 
+    });
   },
 
   resetGame: async () => {
@@ -135,8 +148,8 @@ const useGameStore = create((set, get) => ({
     await dbReset();
     set({
       warehouses: {}, customers: {}, pipes: [],
-      currentWeek: 1, isPaused: false, lastWeekTime: 0,
-      _projCache: null, lastProjectionWeek: -1,
+      currentPeriod: 1, isPaused: false, lastPeriodTime: 0,
+      _projCache: null, lastProjectionPeriod: -1,
     });
   },
 }));

@@ -1,49 +1,59 @@
 import { useEffect, useRef } from 'react';
 import useGameStore from '../store/useGameStore';
 
-const WEEK_DURATION_MS = 100; // 0.1 seconds per week
+const PERIOD_DURATION_MS = 100; // 0.1 seconds per period
+const BUCKETS = ['Day', 'Week', 'Month', 'Quarter', 'Year'];
+const BUCKET_PREFIX = {
+  Day: 'D',
+  Week: 'W',
+  Month: 'M',
+  Quarter: 'Q',
+  Year: 'Y',
+};
 
 export default function Timeline() {
   const {
-    currentWeek,
+    currentPeriod,
+    timeBucket,
+    setTimeBucket,
     timelineLength,
     setTimelineLength,
     isPaused,
     setIsPaused,
-    setLastWeekTime,
-    lastWeekTime,
-    advanceWeek,
-    goBackWeek,
+    setLastPeriodTime,
+    lastPeriodTime,
+    advancePeriod,
+    goBackPeriod,
   } = useGameStore();
 
   const rafRef = useRef(null);
   const progressRef = useRef(null);
 
   useEffect(() => {
-    let startTime = lastWeekTime || performance.now();
+    let startTime = lastPeriodTime || performance.now();
 
     const tick = (now) => {
       if (!isPaused) {
         const elapsed = now - startTime;
-        const ratio = Math.min(elapsed / WEEK_DURATION_MS, 1);
+        const ratio = Math.min(elapsed / PERIOD_DURATION_MS, 1);
 
         if (progressRef.current) {
           progressRef.current.style.setProperty('--progress', `${ratio * 100}%`);
         }
 
-        if (elapsed >= WEEK_DURATION_MS) {
-          if (currentWeek >= timelineLength) {
+        if (elapsed >= PERIOD_DURATION_MS) {
+          if (currentPeriod >= timelineLength) {
             setIsPaused(true);
             // Reset visuals to start state
             if (progressRef.current) progressRef.current.style.setProperty('--progress', '0%');
             
-            // Return to Period 1
-            for (let i = 0; i < currentWeek - 1; i++) goBackWeek();
-            setLastWeekTime(0);
+            // Return to Start
+            for (let i = 0; i < currentPeriod - 1; i++) goBackPeriod();
+            setLastPeriodTime(0);
           } else {
             startTime = now;
-            setLastWeekTime(now);
-            advanceWeek();
+            setLastPeriodTime(now);
+            advancePeriod();
           }
         }
       }
@@ -52,17 +62,17 @@ export default function Timeline() {
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [isPaused, currentWeek, timelineLength, advanceWeek, goBackWeek, setIsPaused, setLastWeekTime]);
+  }, [isPaused, currentPeriod, timelineLength, advancePeriod, goBackPeriod, setIsPaused, setLastPeriodTime]);
 
   const handleScrub = (e) => {
     const target = parseInt(e.target.value, 10);
-    const steps = Math.abs(target - currentWeek);
-    const isForward = target > currentWeek;
+    const steps = Math.abs(target - currentPeriod);
+    const isForward = target > currentPeriod;
     const wasPaused = isPaused;
     setIsPaused(true);
     for (let i = 0; i < steps; i++) {
-      if (isForward) advanceWeek();
-      else goBackWeek();
+      if (isForward) advancePeriod();
+      else goBackPeriod();
     }
     setIsPaused(wasPaused);
   };
@@ -80,10 +90,22 @@ export default function Timeline() {
         maxWidth: '85vw',
       }}
     >
+      {/* Global CSS injection to hide native number input arrows */}
+      <style>
+        {`
+          input::-webkit-outer-spin-button,
+          input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+          }
+          input[type=number] { -moz-appearance: textfield; }
+        `}
+      </style>
+
       {/* Step Back Button */}
       <button
-        onClick={goBackWeek}
-        disabled={currentWeek <= 1}
+        onClick={goBackPeriod}
+        disabled={currentPeriod <= 1}
         className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-all hover:bg-blue-500/20 active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
         style={{
           background: 'rgba(30,41,59,0.5)',
@@ -92,7 +114,7 @@ export default function Timeline() {
           fontSize: '0.9rem',
           cursor: 'pointer',
         }}
-        title="Previous Week"
+        title="Previous Period"
       >
         ⏮
       </button>
@@ -104,7 +126,7 @@ export default function Timeline() {
           className="absolute left-1/2 font-mono font-black text-accent"
           style={{ top: -18, transform: 'translateX(-50%)', fontSize: '0.6rem', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}
         >
-          W {currentWeek}
+          {BUCKET_PREFIX[timeBucket]} {currentPeriod}
         </div>
 
         {/* Button */}
@@ -140,7 +162,7 @@ export default function Timeline() {
 
       {/* Step Forward Button */}
       <button
-        onClick={advanceWeek}
+        onClick={advancePeriod}
         className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-all hover:bg-blue-500/20 active:scale-90"
         style={{
           background: 'rgba(30,41,59,0.5)',
@@ -149,7 +171,7 @@ export default function Timeline() {
           fontSize: '0.9rem',
           cursor: 'pointer',
         }}
-        title="Next Week"
+        title="Next Period"
       >
         ⏭
       </button>
@@ -160,13 +182,13 @@ export default function Timeline() {
           type="range"
           min={1}
           max={timelineLength}
-          value={currentWeek}
+          value={currentPeriod}
           onChange={handleScrub}
           className="w-full"
           style={{
             appearance: 'none',
             height: 2,
-            background: `linear-gradient(to right, #3b82f6 ${((currentWeek - 1) / (timelineLength - 1 || 1)) * 100}%, rgba(99,102,241,0.2) ${((currentWeek - 1) / (timelineLength - 1 || 1)) * 100}%)`,
+            background: `linear-gradient(to right, #3b82f6 ${((currentPeriod - 1) / (timelineLength - 1 || 1)) * 100}%, rgba(99,102,241,0.2) ${((currentPeriod - 1) / (timelineLength - 1 || 1)) * 100}%)`,
             borderRadius: 2,
             outline: 'none',
             cursor: 'pointer',
@@ -187,16 +209,43 @@ export default function Timeline() {
       </div>
 
       {/* Timeline Length Adjustment */}
+      <div className="flex flex-col items-center gap-1 border-l border-white/10 pl-4 ml-2 min-w-[90px]">
+        <span className="text-[0.5rem] font-bold text-slate-500 uppercase tracking-tighter">Bucket</span>
+        <select
+          value={timeBucket}
+          onChange={(e) => setTimeBucket(e.target.value)}
+          className="w-full bg-slate-900/50 border border-blue-500/30 rounded text-center text-[0.65rem] font-mono text-blue-400 focus:outline-none focus:border-blue-500 py-0.5"
+        >
+          {BUCKETS.map((b) => (
+            <option key={b} value={b}>{b}</option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex flex-col items-center gap-1 border-l border-white/10 pl-4 ml-2">
-        <span className="text-[0.5rem] font-bold text-slate-500 uppercase tracking-tighter">Max Weeks</span>
-        <input
-          type="number"
-          min="1"
-          max="999"
-          value={timelineLength}
-          onChange={(e) => setTimelineLength(e.target.value)}
-          className="w-12 bg-slate-900/50 border border-blue-500/30 rounded text-center text-xs font-mono text-blue-400 focus:outline-none focus:border-blue-500"
-        />
+        <span className="text-[0.5rem] font-bold text-slate-500 uppercase tracking-tighter">Max {timeBucket}s</span>
+        <div className="flex items-center">
+          <button
+            onClick={() => setTimelineLength(Math.max(1, timelineLength - 1))}
+            className="w-5 h-5 flex items-center justify-center bg-slate-900/50 border border-blue-500/30 rounded-l text-[0.6rem] text-blue-400 hover:bg-blue-500/20 transition-colors active:scale-95"
+          >
+            —
+          </button>
+          <input
+            type="number"
+            min="1"
+            max="999"
+            value={timelineLength}
+            onChange={(e) => setTimelineLength(e.target.value)}
+            className="w-10 h-5 bg-slate-900/80 border-y border-blue-500/30 text-center text-[0.7rem] font-mono text-blue-400 focus:outline-none"
+          />
+          <button
+            onClick={() => setTimelineLength(Math.min(999, timelineLength + 1))}
+            className="w-5 h-5 flex items-center justify-center bg-slate-900/50 border border-blue-500/30 rounded-r text-[0.6rem] text-blue-400 hover:bg-blue-500/20 transition-colors active:scale-95"
+          >
+            +
+          </button>
+        </div>
       </div>
     </div>
   );

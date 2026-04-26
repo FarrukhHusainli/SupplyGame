@@ -3,6 +3,14 @@ import useGameStore from '../store/useGameStore';
 
 const fmt = (n) => (typeof n === 'number' ? Math.floor(n).toLocaleString('fr-FR') : n ?? '—');
 
+const BUCKET_PREFIX = {
+  Day: 'D',
+  Week: 'W',
+  Month: 'M',
+  Quarter: 'Q',
+  Year: 'Y',
+};
+
 function SectionLabel({ children }) {
   return (
     <div className="flex items-center gap-1 mb-1">
@@ -16,21 +24,22 @@ function SectionLabel({ children }) {
   );
 }
 
-function DataRow({ week, isCurrent, isPast, cells, columns }) {
+function DataRow({ period, isCurrent, isPast, cells, columns, bucket }) {
   const rowCls = isPast ? 'row-past' : isCurrent ? 'row-current' : 'row-future';
+  const prefix = BUCKET_PREFIX[bucket] || 'P';
   return (
     <div
       className={`grid items-center px-2 py-1 rounded-md mb-0.5 text-xs font-mono ${rowCls}`}
       style={{ gridTemplateColumns: columns }}
     >
-      <span className="font-bold text-slate-400" style={{ fontSize: '0.6rem' }}>W{week}</span>
+      <span className="font-bold text-slate-400" style={{ fontSize: '0.6rem' }}>{prefix}{period}</span>
       {cells}
     </div>
   );
 }
 
 function WarehousePanel({ name }) {
-  const { warehouses, customers, pipes, currentWeek, getProjections } = useGameStore();
+  const { warehouses, customers, pipes, currentPeriod, getProjections, timeBucket } = useGameStore();
   const wh = warehouses[name];
   if (!wh) return null;
 
@@ -47,14 +56,14 @@ function WarehousePanel({ name }) {
             className="grid px-2 py-0.5 mb-1"
             style={{ gridTemplateColumns: '28px 1fr 0.8fr 1fr 1fr', fontSize: '0.55rem', color: '#64748b', fontWeight: 800 }}
           >
-            <span>WK</span><span className="text-right">OPEN</span><span className="text-right">SS</span>
+            <span>{BUCKET_PREFIX[timeBucket] || 'PRD'}</span><span className="text-right">OPEN</span><span className="text-right">SS</span>
             <span className="text-right">CLOSE</span><span className="text-right">CL/SS</span>
           </div>
           {periods.map((p) => {
-            const w = currentWeek + p;
+            const w = currentPeriod + p;
             if (w <= 0) return null;
             const isPast = p < 0, isCurrent = p === 0;
-            const h = isPast ? (wh.history || []).find((x) => x.week === w) : null;
+            const h = isPast ? (wh.history || []).find((x) => x.period === w) : null;
             if (isPast && !h) return null;
 
             const opening = isPast ? h.opening : isCurrent ? wh.currentStock : (proj.projected?.[p - 1] ?? 0);
@@ -63,7 +72,7 @@ function WarehousePanel({ name }) {
             const clss = endBal - safety;
 
             return (
-              <DataRow key={p} week={w} isPast={isPast} isCurrent={isCurrent}
+              <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket}
                 columns="28px 1fr 0.8fr 1fr 1fr"
                 cells={<>
                   <span className="val-neu text-right" style={{ fontWeight: 400 }}>{fmt(opening)}</span>
@@ -83,16 +92,16 @@ function WarehousePanel({ name }) {
         <div className="flex-1">
           <div className="grid px-2 py-0.5 mb-1"
             style={{ gridTemplateColumns: '28px 1fr 1fr', fontSize: '0.55rem', color: '#64748b', fontWeight: 800 }}>
-            <span>WK</span><span className="text-right">REQ</span><span className="text-right">RECV</span>
+            <span>{BUCKET_PREFIX[timeBucket] || 'PRD'}</span><span className="text-right">REQ</span><span className="text-right">RECV</span>
           </div>
           {periods.map((p) => {
-            const w = currentWeek + p;
+            const w = currentPeriod + p;
             if (w <= 0) return null;
             const isPast = p < 0, isCurrent = p === 0;
-            const h = isPast ? (wh.history || []).find((x) => x.week === w) : null;
+            const h = isPast ? (wh.history || []).find((x) => x.period === w) : null;
             if (isPast && !h) return null;
             return (
-              <DataRow key={p} week={w} isPast={isPast} isCurrent={isCurrent} columns="28px 1fr 1fr"
+              <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket} columns="28px 1fr 1fr"
                 cells={<>
                   <span className="val-neu text-right">{fmt(isPast ? h.req : proj.required?.[p])}</span>
                   <span className={`text-right ${
@@ -113,19 +122,19 @@ function WarehousePanel({ name }) {
         <div className="flex-1">
           <div className="grid px-2 py-0.5 mb-1"
             style={{ gridTemplateColumns: '28px 0.7fr 0.7fr 0.8fr 1fr', fontSize: '0.55rem', color: '#64748b', fontWeight: 800 }}>
-            <span>WK</span><span>DIR</span><span>INDIR</span><span>TOTAL</span><span>FULL</span>
+            <span>{BUCKET_PREFIX[timeBucket] || 'PRD'}</span><span>DIR</span><span>INDIR</span><span>TOTAL</span><span>FULL</span>
           </div>
           {periods.map((p) => {
-            const w = currentWeek + p;
+            const w = currentPeriod + p;
             if (w <= 0) return null;
             const isPast = p < 0, isCurrent = p === 0;
-            const h = isPast ? (wh.history || []).find((x) => x.week === w) : null;
+            const h = isPast ? (wh.history || []).find((x) => x.period === w) : null;
             if (isPast && !h) return null;
             const d = isPast ? h.direct : (proj.directD?.[p] ?? 0);
             const i = isPast ? h.indirect : (proj.indirectD?.[p] ?? 0);
             const f = isPast ? h.outbound ?? 0 : d + i;
             return (
-              <DataRow key={p} week={w} isPast={isPast} isCurrent={isCurrent}
+              <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket}
                 columns="28px 0.7fr 0.7fr 0.8fr 1fr"
                 cells={<>
                   <span className="val-neu">{fmt(d)}</span>
@@ -143,7 +152,7 @@ function WarehousePanel({ name }) {
 }
 
 function CustomerPanel({ name }) {
-  const { customers, currentWeek } = useGameStore();
+  const { customers, currentPeriod, timeBucket } = useGameStore();
   const cust = customers[name];
   if (!cust) return null;
 
@@ -155,18 +164,18 @@ function CustomerPanel({ name }) {
       <div className="flex-1">
         <div className="grid px-2 py-0.5 mb-1"
           style={{ gridTemplateColumns: '28px 1fr', fontSize: '0.55rem', color: '#64748b', fontWeight: 800 }}>
-          <span>WK</span><span className="text-right">FULFILLMENT / REQ</span>
+          <span>{BUCKET_PREFIX[timeBucket] || 'PRD'}</span><span className="text-right">FULFILLMENT / REQ</span>
         </div>
         {periods.map((p) => {
-          const w = currentWeek + p;
+          const w = currentPeriod + p;
           if (w <= 0) return null;
           const isPast = p < 0, isCurrent = p === 0;
-          const h = isPast ? (cust.history || []).find((x) => x.week === w) : null;
+          const h = isPast ? (cust.history || []).find((x) => x.period === w) : null;
           const d = isPast ? h?.demand : cust.demand[p];
           if (!d) return null;
           const val = typeof d === 'object' ? `${fmt(d.supplied)} / ${fmt(d.original)}` : fmt(d);
           return (
-            <DataRow key={p} week={w} isPast={isPast} isCurrent={isCurrent} columns="28px 1fr"
+            <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket} columns="28px 1fr"
               cells={<span className="val-neu text-right">{val}</span>}
             />
           );
@@ -177,6 +186,7 @@ function CustomerPanel({ name }) {
 }
 
 function PipePanel({ pipeId }) {
+  const timeBucket = useGameStore((s) => s.timeBucket);
   const pipes = useGameStore((s) => s.pipes);
   const pipe = pipes.find((p) => p.id === pipeId);
   if (!pipe) return null;
@@ -186,7 +196,7 @@ function PipePanel({ pipeId }) {
       {[
         { label: 'FROM', value: pipe.from, cls: 'val-pos' },
         { label: 'TO', value: pipe.to, cls: 'val-pos' },
-        { label: 'LEAD TIME', value: `${pipe.leadTime} Weeks`, cls: 'val-recv' },
+        { label: 'LEAD TIME', value: `${pipe.leadTime} ${timeBucket}s`, cls: 'val-recv' },
       ].map(({ label, value, cls }) => (
         <div key={label} className="flex items-center justify-between px-3 py-2 rounded-lg row-future text-xs">
           <span className="text-slate-500 font-bold tracking-wider uppercase" style={{ fontSize: '0.55rem' }}>{label}</span>
