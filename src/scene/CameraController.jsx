@@ -19,6 +19,10 @@ export default function CameraController() {
     camera.position.set(0, 8, 18);
     camera.lookAt(0, 0, 0);
 
+    // Initialize yaw ref from the camera's current rotation after lookAt using Y-axis for Y-up coordinate system.
+    camera.rotation.order = 'YXZ';
+    yaw.current = camera.rotation.y;
+
     const onKeyDown = (e) => {
       keys.current[e.code] = true;
     };
@@ -28,6 +32,11 @@ export default function CameraController() {
     const onWheel = (e) => {
       const dir = new THREE.Vector3();
       camera.getWorldDirection(dir);
+      
+      // Remove vertical component to prevent the camera from moving up/down during zoom
+      dir.y = 0; 
+      dir.normalize();
+      
       camera.position.addScaledVector(dir, -e.deltaY * 0.012);
     };
 
