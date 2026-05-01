@@ -8,11 +8,11 @@ function computePosition(index, total, radius = 18) {
 }
 
 export default function CustomerManager() {
-  const { customers, addCustomer, deleteCustomer } = useGameStore();
+  const { customers, addCustomer, deleteCustomer, currentPeriod } = useGameStore();
   const [name, setName] = useState('');
   const [err, setErr] = useState('');
 
-  const names = Object.keys(customers);
+  const names = Object.keys(customers).filter(n => (customers[n].createdAtPeriod ?? 1) <= currentPeriod);
 
   const handleAdd = () => {
     const trimmed = name.trim().toUpperCase();
@@ -38,7 +38,10 @@ export default function CustomerManager() {
               style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
               {n.slice(0, 2)}
             </div>
-            <div className="flex-1 text-sm font-semibold text-slate-200">{n}</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-slate-200">{n}</div>
+              <div className="text-xs text-slate-500">Added W{customers[n].createdAtPeriod ?? 1}</div>
+            </div>
             <button
               onClick={() => {
                 if (window.confirm(`Delete customer "${n}"?`)) deleteCustomer(n);

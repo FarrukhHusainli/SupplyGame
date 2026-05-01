@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { refreshProjections } from '../simulation/projections';
 import { advanceWeekLogic, goBackWeekLogic } from '../simulation/weekAdvance';
-import { saveStateToDB, resetDatabase as dbReset } from '../db/indexedDB';
+import { saveStateToDB, resetDatabase as dbReset } from '../db/firebase';
 
 /**
  * Central game store.
@@ -31,10 +31,11 @@ const useGameStore = create((set, get) => ({
 
   // ── Node CRUD ───────────────────────────────────────────
   addWarehouse: (name, position, initialStock = 0) => {
+    const createdAtPeriod = get().currentPeriod;
     set((s) => ({
       warehouses: {
         ...s.warehouses,
-        [name]: { position, currentStock: initialStock, initialStock, history: [] },
+        [name]: { position, currentStock: initialStock, initialStock, history: [], createdAtPeriod },
       },
       _projCache: null,
     }));
@@ -43,15 +44,17 @@ const useGameStore = create((set, get) => ({
 
   addCustomer: (name, position) => {
     const demand = Array.from({ length: 12 }, () => ({ original: 100, supplied: 0 }));
+    const createdAtPeriod = get().currentPeriod;
     set((s) => ({
-      customers: { ...s.customers, [name]: { position, demand, history: [] } },
+      customers: { ...s.customers, [name]: { position, demand, history: [], createdAtPeriod } },
     }));
     get()._persist();
   },
 
   addPipe: (from, to, leadTime) => {
     const id = `${from}->${to}-${Date.now()}`;
-    set((s) => ({ pipes: [...s.pipes, { id, from, to, leadTime }], _projCache: null }));
+    const createdAtPeriod = get().currentPeriod;
+    set((s) => ({ pipes: [...s.pipes, { id, from, to, leadTime, createdAtPeriod }], _projCache: null }));
     get()._persist();
   },
 
@@ -127,8 +130,12 @@ const useGameStore = create((set, get) => ({
   getProjections: () => {
     const s = get();
     if (s._projCache && s.lastProjectionPeriod === s.currentPeriod) return s._projCache;
-    const cache = refreshProjections(s.warehouses, s.customers, s.pipes, s.currentPeriod);
-    set({ _projCache: cache, lastProjectionPeriod: s.currentPeriod });
+    const p = s.currentPeriod;
+    const visWarehouses = Object.fromEntries(Object.entries(s.warehouses).filter(([, wh]) => (wh.createdAtPeriod ?? 1) <= p));
+    const visCustomers  = Object.fromEntries(Object.entries(s.customers).filter(([, c])  => (c.createdAtPeriod  ?? 1) <= p));
+    const visPipes      = s.pipes.filter(pipe => (pipe.createdAtPeriod ?? 1) <= p);
+    const cache = refreshProjections(visWarehouses, visCustomers, visPipes, p);
+    set({ _projCache: cache, lastProjectionPeriod: p });
     return cache;
   },
 

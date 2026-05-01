@@ -5,26 +5,33 @@ function randomDemand() {
   return { original: 100, supplied: 0 };
 }
 
+function filterByPeriod(warehouses, customers, pipes, period) {
+  const activeWhs   = Object.fromEntries(Object.entries(warehouses).filter(([, wh]) => (wh.createdAtPeriod ?? 1) <= period));
+  const activeCusts = Object.fromEntries(Object.entries(customers).filter(([, c])  => (c.createdAtPeriod  ?? 1) <= period));
+  const activePipes = pipes.filter(p => (p.createdAtPeriod ?? 1) <= period);
+  return { activeWhs, activeCusts, activePipes };
+}
+
 /**
  * Advance one week: execute physical flows, record history, shift demands.
- * Returns a partial state patch { warehouses, customers, currentWeek }.
+ * Only processes entities that exist at currentWeek (createdAtPeriod <= currentWeek).
  */
 export function advanceWeekLogic({ warehouses, customers, pipes, currentWeek }) {
-  // Deep clone so we don't mutate Zustand state directly
-  const whs = JSON.parse(JSON.stringify(warehouses));
+  const whs  = JSON.parse(JSON.stringify(warehouses));
   const custs = JSON.parse(JSON.stringify(customers));
 
-  const whNames = Object.keys(whs);
-  const projections = refreshProjections(whs, custs, pipes, currentWeek);
-  const sorted = sortWarehousesTopological(whNames, pipes);
+  const { activeWhs, activeCusts, activePipes } = filterByPeriod(whs, custs, pipes, currentWeek);
 
-  // Snapshot metrics before execution
+  const whNames    = Object.keys(activeWhs);
+  const projections = refreshProjections(activeWhs, activeCusts, activePipes, currentWeek);
+  const sorted      = sortWarehousesTopological(whNames, activePipes);
+
   const metrics = {};
   whNames.forEach((name) => {
     const proj = projections[name];
     metrics[name] = {
       week:     currentWeek,
-      opening:  whs[name].currentStock,
+      opening:  activeWhs[name].currentStock,
       req:      proj.required[0],
       recv:     proj.inbound[0],
       safety:   proj.safety[0],
@@ -35,19 +42,17 @@ export function advanceWeekLogic({ warehouses, customers, pipes, currentWeek }) 
   });
 
   const custMetrics = {};
-  Object.keys(custs).forEach((name) => {
-    custMetrics[name] = { week: currentWeek, demand: { ...custs[name].demand[0] } };
+  Object.keys(activeCusts).forEach((name) => {
+    custMetrics[name] = { week: currentWeek, demand: { ...activeCusts[name].demand[0] } };
   });
 
-  // Physical execution (top-down)
   sorted.forEach((name) => {
-    const from = whs[name];
-    pipes.forEach((conn) => {
+    const from = activeWhs[name];
+    activePipes.forEach((conn) => {
       if (conn.from !== name) return;
 
-      if (custs[conn.to]) {
-        // Fulfill customer demand
-        const demandObj = custs[conn.to].demand[0];
+      if (activeCusts[conn.to]) {
+        const demandObj = activeCusts[conn.to].demand[0];
         if (demandObj) {
           const consumption = demandObj.original;
           from.currentStock -= consumption;
@@ -55,41 +60,38 @@ export function advanceWeekLogic({ warehouses, customers, pipes, currentWeek }) 
           demandObj.supplied = consumption;
           if (custMetrics[conn.to]) custMetrics[conn.to].demand.supplied = consumption;
         }
-      } else if (whs[conn.to]) {
-        // Transfer to downstream warehouse
+      } else if (activeWhs[conn.to]) {
         const inboundNeeded = projections[conn.to]?.inbound[0] ?? 0;
-        const sources = pipes.filter((c) => c.to === conn.to && whs[c.from]);
-        const share = inboundNeeded / (sources.length || 1);
+        const sources = activePipes.filter((c) => c.to === conn.to && activeWhs[c.from]);
+        const share   = inboundNeeded / (sources.length || 1);
         const available = Math.max(0, from.currentStock);
-        const shipped = Math.min(share, available);
+        const shipped   = Math.min(share, available);
         from.currentStock -= shipped;
-        whs[conn.to].currentStock += shipped;
+        activeWhs[conn.to].currentStock += shipped;
         if (metrics[name]) metrics[name].outbound += shipped;
       }
     });
   });
 
-  // Finalize: record history, shift demand
   whNames.forEach((name) => {
     const m = metrics[name];
     if (m) {
-      m.endBal = whs[name].currentStock;
-      if (!whs[name].history) whs[name].history = [];
-      whs[name].history.push(m);
-      if (whs[name].history.length > 20) whs[name].history.shift();
+      m.endBal = activeWhs[name].currentStock;
+      if (!activeWhs[name].history) activeWhs[name].history = [];
+      activeWhs[name].history.push(m);
+      if (activeWhs[name].history.length > 20) activeWhs[name].history.shift();
     }
   });
 
-  Object.keys(custs).forEach((name) => {
+  Object.keys(activeCusts).forEach((name) => {
     const m = custMetrics[name];
     if (m) {
-      if (!custs[name].history) custs[name].history = [];
-      custs[name].history.push(m);
-      if (custs[name].history.length > 20) custs[name].history.shift();
+      if (!activeCusts[name].history) activeCusts[name].history = [];
+      activeCusts[name].history.push(m);
+      if (activeCusts[name].history.length > 20) activeCusts[name].history.shift();
     }
-    // Shift demand window
-    custs[name].demand.shift();
-    custs[name].demand.push(randomDemand());
+    activeCusts[name].demand.shift();
+    activeCusts[name].demand.push(randomDemand());
   });
 
   return { warehouses: whs, customers: custs, currentWeek: currentWeek + 1 };
@@ -97,15 +99,17 @@ export function advanceWeekLogic({ warehouses, customers, pipes, currentWeek }) 
 
 /**
  * Rewind one week by restoring from history.
- * Returns a partial state patch.
+ * Skips entities added after prevPeriod (they aren't visible there anyway).
  */
 export function goBackWeekLogic({ warehouses, customers, currentWeek }) {
   if (currentWeek <= 1) return { warehouses, customers, currentWeek };
 
-  const whs = JSON.parse(JSON.stringify(warehouses));
+  const prevPeriod = currentWeek - 1;
+  const whs  = JSON.parse(JSON.stringify(warehouses));
   const custs = JSON.parse(JSON.stringify(customers));
 
   Object.keys(whs).forEach((name) => {
+    if ((whs[name].createdAtPeriod ?? 1) > prevPeriod) return;
     const hist = whs[name].history;
     if (!hist || hist.length === 0) return;
     const h = hist.pop();
@@ -113,6 +117,7 @@ export function goBackWeekLogic({ warehouses, customers, currentWeek }) {
   });
 
   Object.keys(custs).forEach((name) => {
+    if ((custs[name].createdAtPeriod ?? 1) > prevPeriod) return;
     const hist = custs[name].history;
     if (!hist || hist.length === 0) return;
     const h = hist.pop();
@@ -120,5 +125,5 @@ export function goBackWeekLogic({ warehouses, customers, currentWeek }) {
     custs[name].demand.pop();
   });
 
-  return { warehouses: whs, customers: custs, currentWeek: currentWeek - 1 };
+  return { warehouses: whs, customers: custs, currentWeek: prevPeriod };
 }

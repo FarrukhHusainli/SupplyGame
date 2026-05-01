@@ -8,12 +8,12 @@ function computePosition(index, total, radius = 10) {
 }
 
 export default function WarehouseManager() {
-  const { warehouses, addWarehouse, deleteWarehouse } = useGameStore();
+  const { warehouses, addWarehouse, deleteWarehouse, currentPeriod } = useGameStore();
   const [name, setName] = useState('');
   const [stock, setStock] = useState('1000');
   const [err, setErr] = useState('');
 
-  const names = Object.keys(warehouses);
+  const names = Object.keys(warehouses).filter(n => (warehouses[n].createdAtPeriod ?? 1) <= currentPeriod);
 
   const handleAdd = () => {
     const trimmed = name.trim().toUpperCase();
@@ -49,7 +49,7 @@ export default function WarehouseManager() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-slate-200">{n}</div>
-                <div className="text-xs text-slate-500">{wh.currentStock.toLocaleString()} units</div>
+                <div className="text-xs text-slate-500">{wh.currentStock.toLocaleString()} units · Added W{wh.createdAtPeriod ?? 1}</div>
               </div>
               <button
                 onClick={() => handleDelete(n)}

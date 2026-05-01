@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import useGameStore from '../store/useGameStore';
 
-const PERIOD_DURATION_MS = 100; // 0.1 seconds per period
+const PERIOD_DURATION_MS = 5000; // 5 seconds per period
 const BUCKETS = ['Day', 'Week', 'Month', 'Quarter', 'Year'];
 const BUCKET_PREFIX = {
   Day: 'D',

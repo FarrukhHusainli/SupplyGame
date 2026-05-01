@@ -3,15 +3,19 @@ import { ManagerHeader } from '../Modal';
 import useGameStore from '../../store/useGameStore';
 
 export default function SupplyManager() {
-  const { warehouses, customers, pipes, addPipe, deletePipe } = useGameStore();
+  const { warehouses, customers, pipes, addPipe, deletePipe, currentPeriod } = useGameStore();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [lt, setLt] = useState('0');
   const [err, setErr] = useState('');
 
+  const visWarehouses = Object.keys(warehouses).filter(n => (warehouses[n].createdAtPeriod ?? 1) <= currentPeriod);
+  const visCustomers  = Object.keys(customers).filter(n => (customers[n].createdAtPeriod  ?? 1) <= currentPeriod);
+  const visPipes      = pipes.filter(p => (p.createdAtPeriod ?? 1) <= currentPeriod);
+
   const allNodes = [
-    ...Object.keys(warehouses).map((n) => ({ name: n, type: 'warehouse' })),
-    ...Object.keys(customers).map((n) => ({ name: n, type: 'customer' })),
+    ...visWarehouses.map((n) => ({ name: n, type: 'warehouse' })),
+    ...visCustomers.map((n) => ({ name: n, type: 'customer' })),
   ];
 
   const handleAdd = () => {
@@ -28,10 +32,10 @@ export default function SupplyManager() {
       <ManagerHeader title="Supply Connections" icon="🔗" />
 
       <div className="flex flex-col gap-2 mb-5">
-        {pipes.length === 0 && (
+        {visPipes.length === 0 && (
           <p className="text-slate-500 text-xs text-center py-4">No connections yet.</p>
         )}
-        {pipes.map((p) => (
+        {visPipes.map((p) => (
           <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
             style={{ background: 'rgba(30,41,59,0.7)', border: '1px solid rgba(99,102,241,0.15)' }}>
             <div className="flex-1 min-w-0">
@@ -60,7 +64,7 @@ export default function SupplyManager() {
             <label className="text-xs text-slate-500 font-semibold mb-1 block">From</label>
             <select className="input" value={from} onChange={(e) => { setFrom(e.target.value); setErr(''); }}>
               <option value="">-- select --</option>
-              {Object.keys(warehouses).map((n) => (
+              {visWarehouses.map((n) => (
                 <option key={n} value={n}>{n} (WH)</option>
               ))}
             </select>

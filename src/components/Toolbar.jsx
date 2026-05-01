@@ -3,6 +3,8 @@ import useGameStore from '../store/useGameStore';
 
 export default function Toolbar() {
   const setModal = useUIStore((s) => s.setModal);
+  const lightMode = useUIStore((s) => s.lightMode);
+  const toggleLightMode = useUIStore((s) => s.toggleLightMode);
   const resetGame = useGameStore((s) => s.resetGame);
 
   const buttons = [
@@ -15,10 +17,10 @@ export default function Toolbar() {
   return (
     <header className="absolute top-0 left-0 right-0 h-14 flex items-center px-5 gap-3 z-50"
       style={{
-        background: 'rgba(7, 10, 22, 0.88)',
+        background: lightMode ? 'rgba(255,255,255,0.95)' : 'rgba(7, 10, 22, 0.88)',
         backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(59, 130, 246, 0.15)',
-        boxShadow: '0 2px 20px rgba(0,0,0,0.5)',
+        borderBottom: lightMode ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(59, 130, 246, 0.15)',
+        boxShadow: lightMode ? '0 2px 20px rgba(0,0,0,0.08)' : '0 2px 20px rgba(0,0,0,0.5)',
       }}
     >
       {/* Logo */}
@@ -27,7 +29,8 @@ export default function Toolbar() {
           style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}>
           ⛓
         </div>
-        <span className="text-sm font-bold tracking-widest uppercase text-slate-200">
+        <span className="text-sm font-bold tracking-widest uppercase"
+          style={{ color: lightMode ? '#1e293b' : '#e2e8f0' }}>
           SupplyGame
         </span>
       </div>
@@ -45,6 +48,16 @@ export default function Toolbar() {
       ))}
 
       <div className="flex-1" />
+
+      {/* Light/Dark toggle */}
+      <button
+        className="btn-toolbar"
+        onClick={toggleLightMode}
+        title={lightMode ? 'Passer en mode sombre' : 'Passer en mode clair'}
+      >
+        <span>{lightMode ? '🌙' : '☀️'}</span>
+        <span>{lightMode ? 'Dark' : 'Light'}</span>
+      </button>
 
       {/* Reset */}
       <button

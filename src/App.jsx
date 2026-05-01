@@ -3,7 +3,7 @@ import { Suspense, useEffect } from 'react';
 
 import useGameStore from './store/useGameStore';
 import useUIStore from './store/useUIStore';
-import { loadFromDB } from './db/indexedDB';
+import { loadFromDB } from './db/firebase';
 
 // Scene
 import SceneBackground from './scene/SceneBackground';
@@ -11,6 +11,7 @@ import CameraController from './scene/CameraController';
 import WarehouseNode from './scene/WarehouseNode';
 import CustomerNode from './scene/CustomerNode';
 import PipeConnection from './scene/PipeConnection';
+import DraftPipe from './scene/DraftPipe';
 
 // UI
 import Toolbar from './components/Toolbar';
@@ -18,6 +19,7 @@ import InfoPanel from './components/InfoPanel';
 import Timeline from './components/Timeline';
 import Modal from './components/Modal';
 import WarehouseManager from './components/managers/WarehouseManager';
+import LeadTimePopup from './components/LeadTimePopup';
 import CustomerManager from './components/managers/CustomerManager';
 import SupplyManager from './components/managers/SupplyManager';
 import StockManager from './components/managers/StockManager';
@@ -34,21 +36,33 @@ function ManagerContent() {
 
 /** 3D scene content (runs inside <Canvas>) */
 function SceneContent() {
-  const warehouses = useGameStore((s) => s.warehouses);
-  const customers = useGameStore((s) => s.customers);
-  const pipes = useGameStore((s) => s.pipes);
-  const clearSelection = useUIStore((s) => s.clearSelection);
+  const warehouses    = useGameStore((s) => s.warehouses);
+  const customers     = useGameStore((s) => s.customers);
+  const pipes         = useGameStore((s) => s.pipes);
+  const currentPeriod = useGameStore((s) => s.currentPeriod);
+  const clearSelection   = useUIStore((s) => s.clearSelection);
+  const lightMode        = useUIStore((s) => s.lightMode);
+  const pipeDrawing      = useUIStore((s) => s.pipeDrawing);
+  const cancelPipeDrawing = useUIStore((s) => s.cancelPipeDrawing);
+
+  const visWarehouses = Object.fromEntries(Object.entries(warehouses).filter(([, wh]) => (wh.createdAtPeriod ?? 1) <= currentPeriod));
+  const visCustomers  = Object.fromEntries(Object.entries(customers).filter(([, c])  => (c.createdAtPeriod  ?? 1) <= currentPeriod));
+  const visPipes      = pipes.filter(p => (p.createdAtPeriod ?? 1) <= currentPeriod);
 
   return (
     <>
-      <SceneBackground />
+      <color attach="background" args={[lightMode ? '#f8fafc' : '#0a0f1e']} />
+      <SceneBackground lightMode={lightMode} />
       <CameraController />
 
-      {/* Click on empty space → deselect */}
+      {/* Draft pipe arrow follows mouse */}
+      {pipeDrawing && <DraftPipe fromPos={pipeDrawing.fromPos} />}
+
+      {/* Click on empty space → deselect or cancel drawing */}
       <mesh
         position={[0, -0.09, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
-        onClick={clearSelection}
+        onClick={() => pipeDrawing ? cancelPipeDrawing() : clearSelection()}
         visible={false}
       >
         <planeGeometry args={[300, 300]} />
@@ -56,7 +70,7 @@ function SceneContent() {
       </mesh>
 
       {/* Warehouses */}
-      {Object.entries(warehouses).map(([name, wh]) => (
+      {Object.entries(visWarehouses).map(([name, wh]) => (
         <WarehouseNode
           key={name}
           name={name}
@@ -66,7 +80,7 @@ function SceneContent() {
       ))}
 
       {/* Customers */}
-      {Object.entries(customers).map(([name, c]) => (
+      {Object.entries(visCustomers).map(([name, c]) => (
         <CustomerNode
           key={name}
           name={name}
@@ -75,9 +89,9 @@ function SceneContent() {
       ))}
 
       {/* Pipes */}
-      {pipes.map((pipe) => {
-        const fromNode = warehouses[pipe.from] || customers[pipe.from];
-        const toNode = warehouses[pipe.to] || customers[pipe.to];
+      {visPipes.map((pipe) => {
+        const fromNode = visWarehouses[pipe.from] || visCustomers[pipe.from];
+        const toNode   = visWarehouses[pipe.to]   || visCustomers[pipe.to];
         if (!fromNode || !toNode) return null;
         return (
           <PipeConnection
@@ -95,8 +109,9 @@ function SceneContent() {
 export default function App() {
   const hydrate = useGameStore((s) => s.hydrate);
   const setLastWeekTime = useGameStore((s) => s.setLastWeekTime);
+  const lightMode = useUIStore((s) => s.lightMode);
 
-  // Load from IndexedDB on mount
+  // Load from Firebase on mount
   useEffect(() => {
     loadFromDB().then((saved) => {
       if (saved) {
@@ -108,7 +123,11 @@ export default function App() {
   }, [hydrate, setLastWeekTime]);
 
   return (
-    <div className="w-full h-full relative" style={{ background: '#0a0f1e' }}>
+    <div
+      data-theme={lightMode ? 'light' : 'dark'}
+      className="w-full h-full relative"
+      style={{ background: lightMode ? '#f8fafc' : '#0a0f1e' }}
+    >
       {/* ── 3D Canvas (full screen) ── */}
       <Canvas
         className="absolute inset-0"
@@ -126,6 +145,8 @@ export default function App() {
       <Toolbar />
       <InfoPanel />
       <Timeline />
+
+      <LeadTimePopup />
 
       {/* Modal (renders nothing if openModal is null) */}
       <Modal>
