@@ -1,5 +1,6 @@
 import { sortWarehousesTopological } from './topology';
 import { getWarehouseDirectDemand } from './warehouse_node/out/direct';
+import { getWarehouseIndirectDemand } from './warehouse_node/out/indirect';
 
 /**
  * Compute 10-period rolling projection for all warehouses.
@@ -38,14 +39,8 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       const dd = getWarehouseDirectDemand(name, customers, pipes, p);
       results[name].directD[p] = dd;
 
-      // Indirect demand: proportional share of downstream warehouse gross demand
-      let id = 0;
-      pipes.forEach((c) => {
-        if (c.from === name && warehouses[c.to]) {
-          const receiverSources = pipes.filter((conn) => conn.to === c.to).length;
-          id += results[c.to].grossD[p] / (receiverSources || 1);
-        }
-      });
+      // Indirect demand for warehouse
+      const id = getWarehouseIndirectDemand(name, warehouses, pipes, results, p);
       results[name].indirectD[p] = id;
 
       // Gross demand is the sum of direct and indirect
