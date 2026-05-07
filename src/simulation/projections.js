@@ -1,5 +1,5 @@
 import { sortWarehousesTopological } from './topology';
-import { getCustomerRequestedQty } from './customer_node/in/requested';
+import { getWarehouseDirectDemand } from './warehouse_node/out/direct';
 
 /**
  * Compute 10-period rolling projection for all warehouses.
@@ -34,13 +34,8 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
     revSortedWhs.forEach((name) => {
       const wh = warehouses[name];
 
-      // Direct demand: sum of connected customer demands at period p
-      let dd = 0;
-      pipes.forEach((c) => {
-        if (c.from === name && customers[c.to]) {
-          dd += getCustomerRequestedQty(customers[c.to], p);
-        }
-      });
+      // Direct demand for warehouse
+      const dd = getWarehouseDirectDemand(name, customers, pipes, p);
       results[name].directD[p] = dd;
 
       // Indirect demand: proportional share of downstream warehouse gross demand
@@ -60,11 +55,7 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       let ss = 0;
       for (let i = 1; i <= 2; i++) {
         if (p + i < 10) {
-          pipes.forEach((c) => {
-            if (c.from === name && customers[c.to]) {
-              ss += getCustomerRequestedQty(customers[c.to], p + i);
-            }
-          });
+          ss += getWarehouseDirectDemand(name, customers, pipes, p + i);
         }
       }
       results[name].safety[p] = ss;
