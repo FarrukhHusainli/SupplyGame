@@ -1,6 +1,7 @@
 import { sortWarehousesTopological } from './topology';
 import { getWarehouseDirectDemand } from './warehouse_node/out/direct';
 import { getWarehouseIndirectDemand } from './warehouse_node/out/indirect';
+import { getWarehouseGrossDemand } from './warehouse_node/out/gross';
 
 /**
  * Compute 10-period rolling projection for all warehouses.
@@ -43,8 +44,8 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       const id = getWarehouseIndirectDemand(name, warehouses, pipes, results, p);
       results[name].indirectD[p] = id;
 
-      // Gross demand is the sum of direct and indirect
-      results[name].grossD[p] = dd + id;
+      // Gross demand for warehouse
+      results[name].grossD[p] = getWarehouseGrossDemand(dd, id);
 
       // Safety stock: 2-period lookahead on direct customer demand
       let ss = 0;
