@@ -21,6 +21,7 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       required:  Array(10).fill(0),
       directD:   Array(10).fill(0),
       indirectD: Array(10).fill(0),
+      grossD:    Array(10).fill(0),
     };
   });
 
@@ -41,15 +42,18 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       });
       results[name].directD[p] = dd;
 
-      // Indirect demand: proportional share of downstream warehouse requirements
+      // Indirect demand: proportional share of downstream warehouse gross demand
       let id = 0;
       pipes.forEach((c) => {
         if (c.from === name && warehouses[c.to]) {
           const receiverSources = pipes.filter((conn) => conn.to === c.to).length;
-          id += results[c.to].required[p] / (receiverSources || 1);
+          id += results[c.to].grossD[p] / (receiverSources || 1);
         }
       });
       results[name].indirectD[p] = id;
+
+      // Gross demand is the sum of direct and indirect
+      results[name].grossD[p] = dd + id;
 
       // Safety stock: 2-period lookahead on direct customer demand
       let ss = 0;
@@ -65,7 +69,7 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       results[name].safety[p] = ss;
 
       const opening = p === 0 ? wh.currentStock : results[name].projected[p - 1];
-      results[name].required[p] = Math.max(0, dd + id + ss - opening);
+      results[name].required[p] = Math.max(0, results[name].grossD[p] + ss - opening);
     });
 
     // PASS 2: Top-down — fulfillment & throughput
@@ -91,7 +95,7 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       results[name].inbound[p] = inboundTotal;
       const opening = p === 0 ? warehouses[name].currentStock : results[name].projected[p - 1];
       results[name].projected[p] =
-        opening + inboundTotal - results[name].directD[p] - results[name].indirectD[p];
+        opening + inboundTotal - results[name].grossD[p];
     });
   }
 
@@ -111,6 +115,7 @@ export function computeWarehouseStock(warehouseName, warehouses, customers, pipe
       required:  Array(10).fill(0),
       directD:   Array(10).fill(0),
       indirectD: Array(10).fill(0),
+      grossD:    Array(10).fill(0),
     }
   );
 }

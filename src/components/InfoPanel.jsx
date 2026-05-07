@@ -132,14 +132,15 @@ function WarehousePanel({ name }) {
             if (isPast && !h) return null;
             const d = isPast ? h.direct : (proj.directD?.[p] ?? 0);
             const i = isPast ? h.indirect : (proj.indirectD?.[p] ?? 0);
-            const f = isPast ? h.outbound ?? 0 : d + i;
+            const g = isPast ? h.gross : (proj.grossD?.[p] ?? 0);
+            const f = isPast ? h.outbound ?? 0 : g;
             return (
               <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket}
                 columns="28px 0.7fr 0.7fr 0.8fr 1fr"
                 cells={<>
                   <span className="val-neu">{fmt(d)}</span>
                   <span className="val-neu">{fmt(i)}</span>
-                  <span className="val-pos">{fmt(d + i)}</span>
+                  <span className="val-pos">{fmt(g)}</span>
                   <span className="val-recv">{fmt(f)}</span>
                 </>}
               />

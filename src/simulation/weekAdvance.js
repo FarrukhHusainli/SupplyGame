@@ -1,6 +1,6 @@
 import { sortWarehousesTopological } from './topology';
 import { refreshProjections } from './projections';
-import { getCustomerDirectDemand } from './customer_node/out/direct';
+import { getCustomerGrossDemand } from './customer_node/out/gross';
 
 function filterByPeriod(warehouses, customers, pipes, period) {
   const activeWhs   = Object.fromEntries(Object.entries(warehouses).filter(([, wh]) => (wh.createdAtPeriod ?? 1) <= period));
@@ -34,6 +34,7 @@ export function advanceWeekLogic({ warehouses, customers, pipes, currentWeek }) 
       safety:   proj.safety[0],
       direct:   proj.directD[0],
       indirect: proj.indirectD[0],
+      gross:    proj.grossD[0],
       outbound: 0,
     };
   });
@@ -88,7 +89,7 @@ export function advanceWeekLogic({ warehouses, customers, pipes, currentWeek }) 
       if (activeCusts[name].history.length > 20) activeCusts[name].history.shift();
     }
     activeCusts[name].demand.shift();
-    activeCusts[name].demand.push(getCustomerDirectDemand());
+    activeCusts[name].demand.push(getCustomerGrossDemand());
   });
 
   return { warehouses: whs, customers: custs, currentWeek: currentWeek + 1 };
