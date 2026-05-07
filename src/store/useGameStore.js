@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { refreshProjections } from '../simulation/projections';
 import { advanceWeekLogic, goBackWeekLogic } from '../simulation/weekAdvance';
 import { saveStateToDB, resetDatabase as dbReset } from '../db/firebase';
+import { getCustomerDirectDemand } from '../simulation/customer_node/out/direct';
 
 /**
  * Central game store.
@@ -43,7 +44,7 @@ const useGameStore = create((set, get) => ({
   },
 
   addCustomer: (name, position) => {
-    const demand = Array.from({ length: 12 }, () => ({ original: 100, supplied: 0 }));
+    const demand = Array.from({ length: 12 }, () => getCustomerDirectDemand());
     const createdAtPeriod = get().currentPeriod;
     set((s) => ({
       customers: { ...s.customers, [name]: { position, demand, history: [], createdAtPeriod } },

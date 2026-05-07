@@ -1,9 +1,6 @@
 import { sortWarehousesTopological } from './topology';
 import { refreshProjections } from './projections';
-
-function randomDemand() {
-  return { original: 100, supplied: 0 };
-}
+import { getCustomerDirectDemand } from './customer_node/out/direct';
 
 function filterByPeriod(warehouses, customers, pipes, period) {
   const activeWhs   = Object.fromEntries(Object.entries(warehouses).filter(([, wh]) => (wh.createdAtPeriod ?? 1) <= period));
@@ -91,7 +88,7 @@ export function advanceWeekLogic({ warehouses, customers, pipes, currentWeek }) 
       if (activeCusts[name].history.length > 20) activeCusts[name].history.shift();
     }
     activeCusts[name].demand.shift();
-    activeCusts[name].demand.push(randomDemand());
+    activeCusts[name].demand.push(getCustomerDirectDemand());
   });
 
   return { warehouses: whs, customers: custs, currentWeek: currentWeek + 1 };
