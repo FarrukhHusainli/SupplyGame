@@ -1,4 +1,5 @@
 import { sortWarehousesTopological } from './topology';
+import { getCustomerRequestedQty } from './customer_node/in/requested';
 
 /**
  * Compute 10-period rolling projection for all warehouses.
@@ -37,7 +38,7 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       let dd = 0;
       pipes.forEach((c) => {
         if (c.from === name && customers[c.to]) {
-          dd += customers[c.to].demand[p]?.original ?? 0;
+          dd += getCustomerRequestedQty(customers[c.to], p);
         }
       });
       results[name].directD[p] = dd;
@@ -61,7 +62,7 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
         if (p + i < 10) {
           pipes.forEach((c) => {
             if (c.from === name && customers[c.to]) {
-              ss += customers[c.to].demand[p + i]?.original ?? 0;
+              ss += getCustomerRequestedQty(customers[c.to], p + i);
             }
           });
         }
