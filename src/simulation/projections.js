@@ -2,6 +2,7 @@ import { sortWarehousesTopological } from './topology';
 import { getWarehouseDirectDemand } from './warehouse_node/out/direct';
 import { getWarehouseIndirectDemand } from './warehouse_node/out/indirect';
 import { getWarehouseGrossDemand } from './warehouse_node/out/gross';
+import { getWarehouseSafetyStock } from './warehouse_node/stock/safety_stock';
 
 /**
  * Compute 10-period rolling projection for all warehouses.
@@ -47,13 +48,8 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       // Gross demand for warehouse
       results[name].grossD[p] = getWarehouseGrossDemand(dd, id);
 
-      // Safety stock: 2-period lookahead on direct customer demand
-      let ss = 0;
-      for (let i = 1; i <= 2; i++) {
-        if (p + i < 10) {
-          ss += getWarehouseDirectDemand(name, customers, pipes, p + i);
-        }
-      }
+      // Safety stock for warehouse
+      const ss = getWarehouseSafetyStock(name, customers, pipes, p, 10);
       results[name].safety[p] = ss;
 
       const opening = p === 0 ? wh.currentStock : results[name].projected[p - 1];
