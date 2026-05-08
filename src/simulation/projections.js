@@ -3,7 +3,6 @@ import { getWarehouseDirectDemand } from './warehouse_node/out/direct';
 import { getWarehouseIndirectDemand } from './warehouse_node/out/indirect';
 import { getWarehouseGrossDemand } from './warehouse_node/out/gross';
 import { getWarehouseRequestedQty } from './warehouse_node/in/requested';
-import { getWarehouseOutboundQty } from './warehouse_node/out/supplied';
 import { getWarehouseClosingStock } from './warehouse_node/stock/end_on_hand';
 import { getWarehouseOpeningStock } from './warehouse_node/stock/before_on_hand';
 import { getWarehouseSafetyStock } from './warehouse_node/stock/safety_stock';
@@ -61,26 +60,11 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
     });
 
     // PASS 2: Top-down — fulfillment & throughput
-    const availablePool = {};
     whNames.forEach((name) => {
-      availablePool[name] = p === 0 ? warehouses[name].currentStock : results[name].projected[p - 1];
-    });
-
-    sortedWhs.forEach((name) => {
-      const sources = pipes.filter((c) => c.to === name && warehouses[c.from]);
-      let inboundTotal = 0;
-
-      sources.forEach((conn) => {
-        const sName = conn.from;
-        const sDD = results[sName].directD[p];
-        const sAvail = Math.max(0, availablePool[sName] + (results[sName].inbound[p] || 0) - sDD);
-        const share = results[name].required[p] / (sources.length || 1);
-        const shipped = getWarehouseOutboundQty(share, sAvail);
-        inboundTotal += shipped;
-        availablePool[sName] -= shipped;
-      });
-
+      // Unconstrained supply: inbound always matches what was requested
+      const inboundTotal = results[name].required[p];
       results[name].inbound[p] = inboundTotal;
+
       const opening = getWarehouseOpeningStock(warehouses[name], results[name], p);
       results[name].projected[p] = getWarehouseClosingStock(opening, inboundTotal, results[name].grossD[p]);
     });
