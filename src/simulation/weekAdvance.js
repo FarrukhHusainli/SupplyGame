@@ -2,7 +2,7 @@ import { sortWarehousesTopological } from './topology';
 import { refreshProjections } from './projections';
 import { getCustomerGrossDemand } from './customer_node/out/gross';
 import { getCustomerRequestedQty } from './customer_node/in/requested';
-import { getCustomerSuppliedQty } from './customer_node/in/supplied';
+import { getWarehouseOutboundQty } from './warehouse_node/out/supplied';
 
 function filterByPeriod(warehouses, customers, pipes, period) {
   const activeWhs   = Object.fromEntries(Object.entries(warehouses).filter(([, wh]) => (wh.createdAtPeriod ?? 1) <= period));
@@ -55,7 +55,7 @@ export function advanceWeekLogic({ warehouses, customers, pipes, currentWeek }) 
         const customer = activeCusts[conn.to];
         if (customer && customer.demand[0]) {
           const requested = getCustomerRequestedQty(customer, 0);
-          const consumption = getCustomerSuppliedQty(requested, from.currentStock);
+          const consumption = getWarehouseOutboundQty(requested, from.currentStock);
           const demandObj = customer.demand[0];
           from.currentStock -= consumption;
           if (metrics[name]) metrics[name].outbound += consumption;
@@ -67,7 +67,7 @@ export function advanceWeekLogic({ warehouses, customers, pipes, currentWeek }) 
         const sources = activePipes.filter((c) => c.to === conn.to && activeWhs[c.from]);
         const share   = inboundNeeded / (sources.length || 1);
         const available = Math.max(0, from.currentStock);
-        const shipped   = Math.min(share, available);
+        const shipped   = getWarehouseOutboundQty(share, available);
         from.currentStock -= shipped;
         activeWhs[conn.to].currentStock += shipped;
         if (metrics[name]) metrics[name].outbound += shipped;

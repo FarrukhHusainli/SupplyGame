@@ -2,6 +2,8 @@ import { sortWarehousesTopological } from './topology';
 import { getWarehouseDirectDemand } from './warehouse_node/out/direct';
 import { getWarehouseIndirectDemand } from './warehouse_node/out/indirect';
 import { getWarehouseGrossDemand } from './warehouse_node/out/gross';
+import { getWarehouseRequestedQty } from './warehouse_node/in/requested';
+import { getWarehouseOutboundQty } from './warehouse_node/out/supplied';
 import { getWarehouseSafetyStock } from './warehouse_node/stock/safety_stock';
 
 /**
@@ -53,7 +55,7 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
       results[name].safety[p] = ss;
 
       const opening = p === 0 ? wh.currentStock : results[name].projected[p - 1];
-      results[name].required[p] = Math.max(0, results[name].grossD[p] + ss - opening);
+      results[name].required[p] = getWarehouseRequestedQty(results[name].grossD[p], ss, opening);
     });
 
     // PASS 2: Top-down — fulfillment & throughput
@@ -71,7 +73,7 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
         const sDD = results[sName].directD[p];
         const sAvail = Math.max(0, availablePool[sName] + (results[sName].inbound[p] || 0) - sDD);
         const share = results[name].required[p] / (sources.length || 1);
-        const shipped = Math.min(share, sAvail);
+        const shipped = getWarehouseOutboundQty(share, sAvail);
         inboundTotal += shipped;
         availablePool[sName] -= shipped;
       });
