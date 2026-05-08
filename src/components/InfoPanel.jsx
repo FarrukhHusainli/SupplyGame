@@ -1,5 +1,6 @@
 import useUIStore from '../store/useUIStore';
 import useGameStore from '../store/useGameStore';
+import { getWarehouseClosingStockMinusSafety } from '../simulation/warehouse_node/stock/end_on_hand_safety_stock';
 
 const fmt = (n) => (typeof n === 'number' ? Math.floor(n).toLocaleString('fr-FR') : n ?? '—');
 
@@ -69,7 +70,7 @@ function WarehousePanel({ name }) {
             const opening = isPast ? h.opening : isCurrent ? wh.currentStock : (proj.projected?.[p - 1] ?? 0);
             const endBal = isPast ? h.endBal : (proj.projected?.[p] ?? 0);
             const safety = isPast ? h.safety : (proj.safety?.[p] ?? 0);
-            const clss = endBal - safety;
+            const clss = getWarehouseClosingStockMinusSafety(endBal, safety);
 
             return (
               <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket}
