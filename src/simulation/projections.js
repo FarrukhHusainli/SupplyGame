@@ -4,6 +4,7 @@ import { getWarehouseIndirectDemand } from './warehouse_node/out/indirect';
 import { getWarehouseGrossDemand } from './warehouse_node/out/gross';
 import { getWarehouseRequestedQty } from './warehouse_node/in/requested';
 import { getWarehouseOutboundQty } from './warehouse_node/out/supplied';
+import { getWarehouseClosingStock } from './warehouse_node/stock/end_on_hand';
 import { getWarehouseOpeningStock } from './warehouse_node/stock/before_on_hand';
 import { getWarehouseSafetyStock } from './warehouse_node/stock/safety_stock';
 
@@ -81,8 +82,7 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
 
       results[name].inbound[p] = inboundTotal;
       const opening = getWarehouseOpeningStock(warehouses[name], results[name], p);
-      results[name].projected[p] =
-        opening + inboundTotal - results[name].grossD[p];
+      results[name].projected[p] = getWarehouseClosingStock(opening, inboundTotal, results[name].grossD[p]);
     });
   }
 
