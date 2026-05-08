@@ -23,13 +23,12 @@ const THEMES = {
  */
 export default function PipeConnection({ pipe, fromPos, toPos }) {
   const groupRef = useRef();
-  const pipeRef = useRef();
   const arrowRef = useRef();
   const { warehouses, pipes } = useGameStore();
   const { selectedId, selectedType, select, clearSelection } = useUIStore();
   const isSelected = selectedId === pipe.id && selectedType === 'pipe';
 
-  const { curve, tubeGeom, arrowPos, arrowQuat } = useMemo(() => {
+  const { curve, sectionGeoms, arrowPos, arrowQuat } = useMemo(() => {
     const from = new THREE.Vector3(...fromPos);
     const to = new THREE.Vector3(...toPos);
     const mid = from.clone().add(to).multiplyScalar(0.5).setY(1 + pipe.leadTime);
@@ -43,14 +42,30 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
       to.clone().add(dE.clone().multiplyScalar(0.5))
     );
 
-    const tGeom = new THREE.TubeGeometry(c, 20, 0.08, 8, false);
+    // Differentiate between instant (0) and delayed (1+) connections
+    const isInstant = pipe.leadTime === 0;
+    const numSections = isInstant ? 1 : Math.max(1, Math.ceil(pipe.leadTime));
+    const geoms = [];
+    
+    // Instant pipes are continuous (no gaps) and thinner
+    const gapFactor = isInstant ? 0 : 0.1; 
+    const radius = isInstant ? 0.035 : 0.08;
+
+    for (let i = 0; i < numSections; i++) {
+      const tStart = i / numSections;
+      const tEnd = (i + 1) / numSections;
+      
+      const subCurve = new THREE.Curve();
+      subCurve.getPoint = (t) => c.getPoint(THREE.MathUtils.lerp(tStart + (gapFactor/numSections), tEnd - (gapFactor/numSections), t));
+      geoms.push(new THREE.TubeGeometry(subCurve, 12, 0.08, 8, false));
+    }
 
     // Arrow position & orientation at curve midpoint
     const aPos = c.getPoint(0.5);
     const tangent = c.getTangent(0.5);
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent.normalize());
 
-    return { curve: c, tubeGeom: tGeom, arrowPos: aPos, arrowQuat: q };
+    return { curve: c, sectionGeoms: geoms, arrowPos: aPos, arrowQuat: q, isInstant };
   }, [fromPos, toPos, pipe.leadTime]);
 
   // Determine theme based on inbound status of the "from" node
@@ -62,7 +77,7 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
 
   // Match Node behaviors: Floating animation + Color Lerping
   useFrame((state) => {
-    if (!groupRef.current || !pipeRef.current || !arrowRef.current) return;
+    if (!groupRef.current || !arrowRef.current) return;
     
     const t = state.clock.elapsedTime;
     const target = isSelected ? theme.selected : theme.default;
@@ -75,18 +90,19 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
     }
 
     // 2. Color/Emissive Lerp (Tube)
-    pipeRef.current.material.color.lerp(new THREE.Color(target.col), 0.1);
-    pipeRef.current.material.emissive.lerp(new THREE.Color(target.emi), 0.1);
-    pipeRef.current.material.opacity = THREE.MathUtils.lerp(
-      pipeRef.current.material.opacity, 
-      target.op, 
-      0.1
-    );
+    groupRef.current.traverse((child) => {
+      if (child.isMesh && child.material) {
+        child.material.color.lerp(new THREE.Color(target.col), 0.1);
+        child.material.emissive.lerp(new THREE.Color(target.emi), 0.1);
+        child.material.opacity = THREE.MathUtils.lerp(child.material.opacity, target.op, 0.1);
+      }
+    });
 
-    // 3. Sync Arrow
-    arrowRef.current.material.color.copy(pipeRef.current.material.color);
-    arrowRef.current.material.emissive.copy(pipeRef.current.material.emissive);
-    arrowRef.current.material.opacity = pipeRef.current.material.opacity;
+    // 3. Sync Arrow (Special case if not part of traversal or for specific override)
+    if (arrowRef.current.material) {
+      arrowRef.current.material.color.lerp(new THREE.Color(target.col), 0.1);
+      arrowRef.current.material.opacity = THREE.MathUtils.lerp(arrowRef.current.material.opacity, target.op, 0.1);
+    }
   });
 
   const handleClick = (e) => {
@@ -97,15 +113,17 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
 
   return (
     <group ref={groupRef}>
-      {/* Tube */}
-      <mesh ref={pipeRef} geometry={tubeGeom} onClick={handleClick}>
-        <meshPhongMaterial
-          color={theme.default.col}
-          emissive={theme.default.emi}
-          shininess={20}
-          transparent
-        />
-      </mesh>
+      {/* Segmented Tube */}
+      {sectionGeoms.map((geom, i) => (
+        <mesh key={i} geometry={geom} onClick={handleClick}>
+          <meshPhongMaterial
+            color={theme.default.col}
+            emissive={theme.default.emi}
+            shininess={20}
+            transparent
+          />
+        </mesh>
+      ))}
 
       {/* Arrow cone */}
       <mesh
@@ -114,7 +132,7 @@ export default function PipeConnection({ pipe, fromPos, toPos }) {
         quaternion={arrowQuat}
         onClick={handleClick}
       >
-        <coneGeometry args={[0.22, 0.55, 16]} />
+        <coneGeometry args={[arrowQuat.isInstant ? 0.16 : 0.22, arrowQuat.isInstant ? 0.4 : 0.55, 16]} />
         <meshPhongMaterial
           color={theme.default.col}
           emissive={theme.default.emi}
