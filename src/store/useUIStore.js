@@ -32,6 +32,16 @@ const useUIStore = create((set) => ({
   pendingPipe: null,
   setPendingPipe: (fromId, toId) => set({ pipeDrawing: null, pendingPipe: { fromId, toId } }),
   clearPendingPipe: () => set({ pendingPipe: null }),
+
+  // Camera zoom target: { pos:[x,y,z], lookAt:[x,y,z] } | null
+  zoomTarget: null,
+  setZoomTarget: (pos, lookAt) => set({ zoomTarget: { pos, lookAt } }),
+  clearZoomTarget: () => set({ zoomTarget: null }),
+
+  // Slider-driven y-only zoom (height above the map).
+  // CameraController lerps camera.position.y toward this each frame.
+  targetCamY: null,
+  setTargetCamY: (y) => set({ targetCamY: y }),
 }));
 
 export default useUIStore;

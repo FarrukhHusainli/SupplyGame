@@ -14,6 +14,7 @@ import VendorNode from './scene/VendorNode';
 import PipeConnection from './scene/PipeConnection';
 import DraftPipe from './scene/DraftPipe';
 import DragController from './scene/DragController';
+import WorldMap from './scene/WorldMap';
 
 // UI
 import Toolbar from './components/Toolbar';
@@ -26,6 +27,8 @@ import CustomerManager from './components/managers/CustomerManager';
 import VendorManager from './components/managers/VendorManager';
 import SupplyManager from './components/managers/SupplyManager';
 import StockManager from './components/managers/StockManager';
+import GlobeControls from './components/GlobeControls';
+import StateControls from './components/StateControls';
 
 /** Render the correct manager based on openModal */
 function ManagerContent() {
@@ -57,8 +60,9 @@ function SceneContent() {
 
   return (
     <>
-      <color attach="background" args={[lightMode ? '#f8fafc' : '#0a0f1e']} />
+      <color attach="background" args={[lightMode ? '#f0f4f8' : '#060d1f']} />
       <SceneBackground lightMode={lightMode} />
+      <WorldMap />
       <CameraController />
 
       {/* Drag controller — raycasts mouse to ground, commits position on drop */}
@@ -74,7 +78,7 @@ function SceneContent() {
         onClick={() => pipeDrawing ? cancelPipeDrawing() : clearSelection()}
         visible={false}
       >
-        <planeGeometry args={[300, 300]} />
+        <planeGeometry args={[800, 800]} />
         <meshBasicMaterial />
       </mesh>
 
@@ -129,7 +133,7 @@ function SceneContent() {
 
 export default function App() {
   const hydrate = useGameStore((s) => s.hydrate);
-  const setLastWeekTime = useGameStore((s) => s.setLastWeekTime);
+  const setLastWeekTime = useGameStore((s) => s.setLastPeriodTime);
   const lightMode = useUIStore((s) => s.lightMode);
 
   // Load from Firebase on mount
@@ -143,31 +147,49 @@ export default function App() {
     });
   }, [hydrate, setLastWeekTime]);
 
+  // Global Ctrl+Z / Cmd+Z → undo (skip when typing in an input)
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        useGameStore.getState().undo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   return (
     <div
       data-theme={lightMode ? 'light' : 'dark'}
       className="w-full h-full relative"
-      style={{ background: lightMode ? '#f8fafc' : '#0a0f1e' }}
+      style={{ background: lightMode ? '#f0f4f8' : '#060d1f' }}
     >
       {/* ── 3D Canvas (full screen) ── */}
       <Canvas
         className="absolute inset-0"
-        camera={{ fov: 50, near: 0.1, far: 1000, position: [0, 8, 18] }}
+        camera={{ fov: 50, near: 0.1, far: 2000, position: [0, 220, 110] }}
         gl={{ antialias: true, alpha: false }}
-        style={{ background: '#0a0f1e' }}
+        style={{ background: '#060d1f' }}
       >
-        <color attach="background" args={['#0a0f1e']} />
+        <color attach="background" args={['#060d1f']} />
         <Suspense fallback={null}>
           <SceneContent />
         </Suspense>
       </Canvas>
 
       {/* ── HTML Overlays ── */}
+      <StateControls />
       <Toolbar />
       <InfoPanel />
       <Timeline />
 
       <LeadTimePopup />
+
+      {/* Globe zoom controls (bottom-left) */}
+      <GlobeControls />
 
       {/* Modal (renders nothing if openModal is null) */}
       <Modal>

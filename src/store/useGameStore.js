@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { refreshProjections } from '../simulation/projections';
 import { advanceWeekLogic, goBackWeekLogic } from '../simulation/weekAdvance';
-import { saveStateToDB, resetDatabase as dbReset } from '../db/firebase';
+import { saveStateToDB, resetDatabase as dbReset, saveInitialToDB, loadInitialFromDB } from '../db/firebase';
 import { getCustomerGrossDemand } from '../simulation/customer_node/out/gross';
 
 /**
@@ -29,11 +29,105 @@ const useGameStore = create((set, get) => ({
   _projCache: null,
   lastProjectionPeriod: -1,
 
+  // ── App mode & history ─────────────────────────────────
+  // appMode: 'saved' | 'simulation'
+  // 'saved'      → every mutation auto-saves to Firebase
+  // 'simulation' → mutations are in-memory only; closing & reopening restores last saved state
+  appMode: 'saved',
+  _history: [],        // undo stack — array of {warehouses,customers,vendors,pipes} snapshots (max 50)
+  _simBaseline: null,  // deep-copy of state at the moment simulation was entered
+
   // ── Hydrate from DB ─────────────────────────────────────
   hydrate: (data) => set({ ...data, _projCache: null, lastProjectionPeriod: -1 }),
 
+  // ── Snapshot helpers ────────────────────────────────────
+  /** Deep-copy the four mutable collections (used for undo & simulation baseline). */
+  _snapshot: () => {
+    const s = get();
+    return {
+      warehouses: JSON.parse(JSON.stringify(s.warehouses)),
+      customers:  JSON.parse(JSON.stringify(s.customers)),
+      vendors:    JSON.parse(JSON.stringify(s.vendors)),
+      pipes:      JSON.parse(JSON.stringify(s.pipes)),
+    };
+  },
+
+  /** Push current state onto the undo stack (call BEFORE any mutation). */
+  pushHistory: () => {
+    const snap = get()._snapshot();
+    set((s) => ({ _history: [...s._history.slice(-49), snap] }));
+  },
+
+  /** Undo the last pushed snapshot (works in both modes). */
+  undo: () => {
+    const s = get();
+    if (s._history.length === 0) return;
+    const prev = s._history[s._history.length - 1];
+    set({ ...prev, _history: s._history.slice(0, -1), _projCache: null });
+    if (s.appMode === 'saved') get()._persist();
+  },
+
+  // ── Simulation mode ─────────────────────────────────────
+  /** Switch to Simulation — all changes are in-memory until Save or Discard. */
+  enterSimulation: () => {
+    const baseline = get()._snapshot();
+    set({ appMode: 'simulation', _simBaseline: baseline });
+  },
+
+  /**
+   * Exit Simulation.
+   * save=true  → commit current state to Firebase, switch to saved.
+   * save=false → restore the pre-simulation baseline (Firebase already correct), switch to saved.
+   */
+  exitSimulation: (save) => {
+    if (save) {
+      set({ appMode: 'saved', _simBaseline: null });
+      get()._persist();
+    } else {
+      const baseline = get()._simBaseline;
+      set({
+        ...(baseline ?? {}),
+        appMode: 'saved',
+        _simBaseline: null,
+        _history: [],
+        _projCache: null,
+        lastProjectionPeriod: -1,
+      });
+      // Firebase already has the correct saved state — no re-write needed.
+    }
+  },
+
+  // ── Initial state ────────────────────────────────────────
+  /** Write current layout to Firebase as the "Initial" snapshot. */
+  saveInitialState: async () => {
+    const snap = get()._snapshot();
+    await saveInitialToDB(snap);
+  },
+
+  /**
+   * Load the "Initial" snapshot from Firebase and apply it.
+   * In saved mode this also auto-saves (overwriting Firebase with the initial layout).
+   * Returns false if no initial snapshot exists yet.
+   */
+  resetToInitial: async () => {
+    const initial = await loadInitialFromDB();
+    if (!initial) return false;
+    get().pushHistory(); // allow undoing the reset
+    set({
+      warehouses: initial.warehouses ?? {},
+      customers:  initial.customers  ?? {},
+      vendors:    initial.vendors    ?? {},
+      pipes:      initial.pipes      ?? [],
+      _projCache: null,
+      lastProjectionPeriod: -1,
+    });
+    if (get().appMode === 'saved') get()._persist();
+    return true;
+  },
+
   // ── Node CRUD ───────────────────────────────────────────
   addWarehouse: (name, position, initialStock = 0) => {
+    get().pushHistory();
     const createdAtPeriod = get().currentPeriod;
     set((s) => ({
       warehouses: {
@@ -46,6 +140,7 @@ const useGameStore = create((set, get) => ({
   },
 
   addCustomer: (name, position) => {
+    get().pushHistory();
     const demand = Array.from({ length: 12 }, () => getCustomerGrossDemand());
     const createdAtPeriod = get().currentPeriod;
     set((s) => ({
@@ -55,6 +150,7 @@ const useGameStore = create((set, get) => ({
   },
 
   addPipe: (from, to, leadTime) => {
+    get().pushHistory();
     const id = `${from}->${to}-${Date.now()}`;
     const createdAtPeriod = get().currentPeriod;
     set((s) => ({ pipes: [...s.pipes, { id, from, to, leadTime, createdAtPeriod }], _projCache: null }));
@@ -62,6 +158,7 @@ const useGameStore = create((set, get) => ({
   },
 
   deleteWarehouse: (name) => {
+    get().pushHistory();
     set((s) => {
       const warehouses = { ...s.warehouses };
       delete warehouses[name];
@@ -72,6 +169,7 @@ const useGameStore = create((set, get) => ({
   },
 
   deleteCustomer: (name) => {
+    get().pushHistory();
     set((s) => {
       const customers = { ...s.customers };
       delete customers[name];
@@ -82,6 +180,7 @@ const useGameStore = create((set, get) => ({
   },
 
   addVendor: (name, position) => {
+    get().pushHistory();
     const createdAtPeriod = get().currentPeriod;
     set((s) => ({
       vendors: { ...s.vendors, [name]: { position, createdAtPeriod } },
@@ -90,6 +189,7 @@ const useGameStore = create((set, get) => ({
   },
 
   deleteVendor: (name) => {
+    get().pushHistory();
     set((s) => {
       const vendors = { ...s.vendors };
       delete vendors[name];
@@ -115,6 +215,7 @@ const useGameStore = create((set, get) => ({
   },
 
   deletePipe: (id) => {
+    get().pushHistory();
     set((s) => ({ pipes: s.pipes.filter((p) => p.id !== id), _projCache: null }));
     get()._persist();
   },
@@ -150,6 +251,7 @@ const useGameStore = create((set, get) => ({
   },
 
   updatePipeLeadTime: (id, leadTime) => {
+    get().pushHistory();
     set((s) => ({
       pipes: s.pipes.map((p) => p.id === id ? { ...p, leadTime } : p),
       _projCache: null,
@@ -158,6 +260,7 @@ const useGameStore = create((set, get) => ({
   },
 
   updateNodePosition: (name, nodeType, position) => {
+    get().pushHistory();
     set((s) => {
       if (nodeType === 'warehouse') {
         return { warehouses: { ...s.warehouses, [name]: { ...s.warehouses[name], position } } };
@@ -193,6 +296,7 @@ const useGameStore = create((set, get) => ({
   },
 
   updateStockLevel: (warehouseName, newStock) => {
+    get().pushHistory();
     set((s) => ({
       warehouses: {
         ...s.warehouses,
@@ -252,6 +356,7 @@ const useGameStore = create((set, get) => ({
   // ── Persistence ──────────────────────────────────────────
   _persist: () => {
     const state = get();
+    if (state.appMode !== 'saved') return; // simulation → never auto-save
     saveStateToDB({
       warehouses: state.warehouses,
       customers:  state.customers,
