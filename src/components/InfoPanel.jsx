@@ -212,13 +212,31 @@ function PipePanel({ pipeId }) {
 export default function InfoPanel() {
   const { selectedId, selectedType, clearSelection } = useUIStore();
   const deleteWarehouse = useGameStore((s) => s.deleteWarehouse);
-  const deleteCustomer = useGameStore((s) => s.deleteCustomer);
-  const deletePipe = useGameStore((s) => s.deletePipe);
+  const deleteCustomer  = useGameStore((s) => s.deleteCustomer);
+  const deletePipe      = useGameStore((s) => s.deletePipe);
+  const toggleLock      = useGameStore((s) => s.toggleLock);
+  const pipes           = useGameStore((s) => s.pipes);
+  const warehouses      = useGameStore((s) => s.warehouses);
+  const customers       = useGameStore((s) => s.customers);
+  const vendors         = useGameStore((s) => s.vendors);
+
+  // For pipes, show "FROM → TO" instead of the raw internal ID
+  const selectedPipe = selectedType === 'pipe' ? pipes.find((p) => p.id === selectedId) : null;
+  const displayName  = selectedPipe ? `${selectedPipe.from} → ${selectedPipe.to}` : selectedId;
+
+  // Lock state for the selected node
+  const isLocked =
+    selectedType === 'warehouse' ? (warehouses[selectedId]?.locked ?? false) :
+    selectedType === 'customer'  ? (customers[selectedId]?.locked  ?? false) :
+    selectedType === 'vendor'    ? (vendors[selectedId]?.locked    ?? false) :
+    false;
+
+  const canLock = selectedType === 'warehouse' || selectedType === 'customer' || selectedType === 'vendor';
 
   const visible = !!selectedId;
 
   const handleDelete = () => {
-    if (!window.confirm(`Delete "${selectedId}"?`)) return;
+    if (!window.confirm(`Delete "${displayName}"?`)) return;
     if (selectedType === 'warehouse') deleteWarehouse(selectedId);
     else if (selectedType === 'customer') deleteCustomer(selectedId);
     else if (selectedType === 'pipe') deletePipe(selectedId);
@@ -246,7 +264,7 @@ export default function InfoPanel() {
           style={{ borderBottom: '1px solid rgba(59,130,246,0.15)' }}>
           <div>
             <div className="text-xs text-slate-500 font-semibold uppercase tracking-widest mb-0.5">{typeLabel}</div>
-            <div className="text-sm font-bold text-slate-100">{selectedId}</div>
+            <div className="text-sm font-bold text-slate-100">{displayName}</div>
           </div>
           <button
             className="w-7 h-7 rounded-full flex items-center justify-center text-slate-500 transition-colors hover:text-red-400"
@@ -262,9 +280,25 @@ export default function InfoPanel() {
         {selectedType === 'customer' && <CustomerPanel name={selectedId} />}
         {selectedType === 'pipe' && <PipePanel pipeId={selectedId} />}
 
+        {/* Lock / Unlock */}
+        {canLock && (
+          <button
+            className="w-full mt-3 justify-center text-xs font-semibold py-2 rounded-lg flex items-center gap-2"
+            style={{
+              background: isLocked ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.1)',
+              border: isLocked ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(59,130,246,0.2)',
+              color: isLocked ? '#f59e0b' : '#93c5fd',
+            }}
+            onClick={() => toggleLock(selectedId, selectedType)}
+          >
+            <span>{isLocked ? '🔒' : '🔓'}</span>
+            <span>{isLocked ? 'Locked — click to unlock' : 'Unlocked — click to lock'}</span>
+          </button>
+        )}
+
         {/* Delete */}
         <button
-          className="btn-danger w-full mt-3 justify-center text-xs"
+          className="btn-danger w-full mt-2 justify-center text-xs"
           onClick={handleDelete}
         >
           Delete {selectedType}

@@ -1,7 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useGameStore from '../store/useGameStore';
 
-const PERIOD_DURATION_MS = 5000; // 5 seconds per period
 const BUCKETS = ['Day', 'Week', 'Month', 'Quarter', 'Year'];
 const BUCKET_PREFIX = {
   Day: 'D',
@@ -18,6 +17,8 @@ export default function Timeline() {
     setTimeBucket,
     timelineLength,
     setTimelineLength,
+    periodDuration,
+    setPeriodDuration,
     isPaused,
     setIsPaused,
     setLastPeriodTime,
@@ -25,6 +26,11 @@ export default function Timeline() {
     advancePeriod,
     goBackPeriod,
   } = useGameStore();
+
+  const PERIOD_DURATION_MS = periodDuration * 1000;
+
+  // Local draft value while user is editing
+  const [draftDuration, setDraftDuration] = useState(String(periodDuration));
 
   const rafRef = useRef(null);
   const progressRef = useRef(null);
@@ -244,6 +250,37 @@ export default function Timeline() {
             className="w-5 h-5 flex items-center justify-center bg-slate-900/50 border border-blue-500/30 rounded-r text-[0.6rem] text-blue-400 hover:bg-blue-500/20 transition-colors active:scale-95"
           >
             +
+          </button>
+        </div>
+      </div>
+
+      {/* Period Duration */}
+      <div className="flex flex-col items-center gap-1 border-l border-white/10 pl-4 ml-2 min-w-[80px]">
+        <span className="text-[0.5rem] font-bold text-slate-500 uppercase tracking-tighter">Sec / Period</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min="1"
+            max="60"
+            step="1"
+            value={draftDuration}
+            onChange={(e) => setDraftDuration(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setPeriodDuration(draftDuration);
+                e.target.blur();
+              }
+            }}
+            className="w-10 h-5 bg-slate-900/80 border border-blue-500/30 rounded-l text-center text-[0.7rem] font-mono text-blue-400 focus:outline-none"
+          />
+          <button
+            onClick={() => {
+              setPeriodDuration(draftDuration);
+              setDraftDuration(String(Math.max(1, parseFloat(draftDuration) || 5)));
+            }}
+            className="h-5 px-1.5 bg-blue-500/20 border border-blue-500/30 rounded-r text-[0.55rem] font-bold text-blue-400 hover:bg-blue-500/40 transition-colors active:scale-95"
+          >
+            OK
           </button>
         </div>
       </div>

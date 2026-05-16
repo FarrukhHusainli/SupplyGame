@@ -14,12 +14,14 @@ const useGameStore = create((set, get) => ({
   // ── Data ───────────────────────────────────────────────
   warehouses: {},
   customers: {},
+  vendors: {},
   pipes: [],
 
   // ── Time ───────────────────────────────────────────────
   currentPeriod: 1,
   timeBucket: 'Week', // 'Day' | 'Week' | 'Month' | 'Quarter' | 'Year'
   timelineLength: 100,
+  periodDuration: 5,  // seconds per period (user-configurable)
   isPaused: false,
   lastPeriodTime: 0,
 
@@ -79,8 +81,114 @@ const useGameStore = create((set, get) => ({
     get()._persist();
   },
 
+  addVendor: (name, position) => {
+    const createdAtPeriod = get().currentPeriod;
+    set((s) => ({
+      vendors: { ...s.vendors, [name]: { position, createdAtPeriod } },
+    }));
+    get()._persist();
+  },
+
+  deleteVendor: (name) => {
+    set((s) => {
+      const vendors = { ...s.vendors };
+      delete vendors[name];
+      const pipes = s.pipes.filter((p) => p.from !== name && p.to !== name);
+      return { vendors, pipes };
+    });
+    get()._persist();
+  },
+
+  renameVendor: (oldName, newName) => {
+    set((s) => {
+      const vendors = { ...s.vendors };
+      vendors[newName] = { ...vendors[oldName] };
+      delete vendors[oldName];
+      const pipes = s.pipes.map((p) => ({
+        ...p,
+        from: p.from === oldName ? newName : p.from,
+        to:   p.to   === oldName ? newName : p.to,
+      }));
+      return { vendors, pipes };
+    });
+    get()._persist();
+  },
+
   deletePipe: (id) => {
     set((s) => ({ pipes: s.pipes.filter((p) => p.id !== id), _projCache: null }));
+    get()._persist();
+  },
+
+  renameWarehouse: (oldName, newName) => {
+    set((s) => {
+      const warehouses = { ...s.warehouses };
+      warehouses[newName] = { ...warehouses[oldName] };
+      delete warehouses[oldName];
+      const pipes = s.pipes.map((p) => ({
+        ...p,
+        from: p.from === oldName ? newName : p.from,
+        to:   p.to   === oldName ? newName : p.to,
+      }));
+      return { warehouses, pipes, _projCache: null };
+    });
+    get()._persist();
+  },
+
+  renameCustomer: (oldName, newName) => {
+    set((s) => {
+      const customers = { ...s.customers };
+      customers[newName] = { ...customers[oldName] };
+      delete customers[oldName];
+      const pipes = s.pipes.map((p) => ({
+        ...p,
+        from: p.from === oldName ? newName : p.from,
+        to:   p.to   === oldName ? newName : p.to,
+      }));
+      return { customers, pipes };
+    });
+    get()._persist();
+  },
+
+  updatePipeLeadTime: (id, leadTime) => {
+    set((s) => ({
+      pipes: s.pipes.map((p) => p.id === id ? { ...p, leadTime } : p),
+      _projCache: null,
+    }));
+    get()._persist();
+  },
+
+  updateNodePosition: (name, nodeType, position) => {
+    set((s) => {
+      if (nodeType === 'warehouse') {
+        return { warehouses: { ...s.warehouses, [name]: { ...s.warehouses[name], position } } };
+      }
+      if (nodeType === 'customer') {
+        return { customers: { ...s.customers, [name]: { ...s.customers[name], position } } };
+      }
+      if (nodeType === 'vendor') {
+        return { vendors: { ...s.vendors, [name]: { ...s.vendors[name], position } } };
+      }
+      return {};
+    });
+    get()._persist();
+  },
+
+  toggleLock: (name, nodeType) => {
+    set((s) => {
+      if (nodeType === 'warehouse') {
+        const node = s.warehouses[name];
+        return { warehouses: { ...s.warehouses, [name]: { ...node, locked: !node.locked } } };
+      }
+      if (nodeType === 'customer') {
+        const node = s.customers[name];
+        return { customers: { ...s.customers, [name]: { ...node, locked: !node.locked } } };
+      }
+      if (nodeType === 'vendor') {
+        const node = s.vendors[name];
+        return { vendors: { ...s.vendors, [name]: { ...node, locked: !node.locked } } };
+      }
+      return {};
+    });
     get()._persist();
   },
 
@@ -99,6 +207,7 @@ const useGameStore = create((set, get) => ({
   setIsPaused: (isPaused) => set({ isPaused }),
   setLastPeriodTime: (t) => set({ lastPeriodTime: t }),
   setTimeBucket: (timeBucket) => set({ timeBucket }),
+  setPeriodDuration: (secs) => set({ periodDuration: Math.max(1, parseFloat(secs) || 5) }),
   setTimelineLength: (length) => {
     const val = Math.max(1, parseInt(length) || 1);
     set((s) => ({
@@ -143,11 +252,12 @@ const useGameStore = create((set, get) => ({
   // ── Persistence ──────────────────────────────────────────
   _persist: () => {
     const state = get();
-    saveStateToDB({ 
-      warehouses: state.warehouses, 
-      customers: state.customers, 
-      pipes: state.pipes, 
-      currentPeriod: state.currentPeriod 
+    saveStateToDB({
+      warehouses: state.warehouses,
+      customers:  state.customers,
+      vendors:    state.vendors,
+      pipes:      state.pipes,
+      currentPeriod: state.currentPeriod,
     });
   },
 
@@ -155,7 +265,7 @@ const useGameStore = create((set, get) => ({
     if (!window.confirm('Clear all game data and restart?')) return;
     await dbReset();
     set({
-      warehouses: {}, customers: {}, pipes: [],
+      warehouses: {}, customers: {}, vendors: {}, pipes: [],
       currentPeriod: 1, isPaused: false, lastPeriodTime: 0,
       _projCache: null, lastProjectionPeriod: -1,
     });

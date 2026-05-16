@@ -9,6 +9,7 @@ export default function Toolbar() {
 
   const buttons = [
     { label: 'Warehouses',   icon: '🏭', modal: 'warehouses' },
+    { label: 'Vendors',      icon: '🚚', modal: 'vendors'    },
     { label: 'Customers',    icon: '👥', modal: 'customers'  },
     { label: 'Supply Chain', icon: '🔗', modal: 'supply'     },
     { label: 'Stock DB',     icon: '📦', modal: 'stock'      },

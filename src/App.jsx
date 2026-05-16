@@ -10,8 +10,10 @@ import SceneBackground from './scene/SceneBackground';
 import CameraController from './scene/CameraController';
 import WarehouseNode from './scene/WarehouseNode';
 import CustomerNode from './scene/CustomerNode';
+import VendorNode from './scene/VendorNode';
 import PipeConnection from './scene/PipeConnection';
 import DraftPipe from './scene/DraftPipe';
+import DragController from './scene/DragController';
 
 // UI
 import Toolbar from './components/Toolbar';
@@ -21,6 +23,7 @@ import Modal from './components/Modal';
 import WarehouseManager from './components/managers/WarehouseManager';
 import LeadTimePopup from './components/LeadTimePopup';
 import CustomerManager from './components/managers/CustomerManager';
+import VendorManager from './components/managers/VendorManager';
 import SupplyManager from './components/managers/SupplyManager';
 import StockManager from './components/managers/StockManager';
 
@@ -29,6 +32,7 @@ function ManagerContent() {
   const openModal = useUIStore((s) => s.openModal);
   if (openModal === 'warehouses') return <WarehouseManager />;
   if (openModal === 'customers') return <CustomerManager />;
+  if (openModal === 'vendors') return <VendorManager />;
   if (openModal === 'supply') return <SupplyManager />;
   if (openModal === 'stock') return <StockManager />;
   return null;
@@ -38,6 +42,7 @@ function ManagerContent() {
 function SceneContent() {
   const warehouses    = useGameStore((s) => s.warehouses);
   const customers     = useGameStore((s) => s.customers);
+  const vendors       = useGameStore((s) => s.vendors);
   const pipes         = useGameStore((s) => s.pipes);
   const currentPeriod = useGameStore((s) => s.currentPeriod);
   const clearSelection   = useUIStore((s) => s.clearSelection);
@@ -47,6 +52,7 @@ function SceneContent() {
 
   const visWarehouses = Object.fromEntries(Object.entries(warehouses).filter(([, wh]) => (wh.createdAtPeriod ?? 1) <= currentPeriod));
   const visCustomers  = Object.fromEntries(Object.entries(customers).filter(([, c])  => (c.createdAtPeriod  ?? 1) <= currentPeriod));
+  const visVendors    = Object.fromEntries(Object.entries(vendors).filter(([, v])    => (v.createdAtPeriod  ?? 1) <= currentPeriod));
   const visPipes      = pipes.filter(p => (p.createdAtPeriod ?? 1) <= currentPeriod);
 
   return (
@@ -54,6 +60,9 @@ function SceneContent() {
       <color attach="background" args={[lightMode ? '#f8fafc' : '#0a0f1e']} />
       <SceneBackground lightMode={lightMode} />
       <CameraController />
+
+      {/* Drag controller — raycasts mouse to ground, commits position on drop */}
+      <DragController />
 
       {/* Draft pipe arrow follows mouse */}
       {pipeDrawing && <DraftPipe fromPos={pipeDrawing.fromPos} />}
@@ -76,6 +85,7 @@ function SceneContent() {
           name={name}
           position={wh.position}
           currentStock={wh.currentStock}
+          locked={wh.locked ?? false}
         />
       ))}
 
@@ -85,13 +95,24 @@ function SceneContent() {
           key={name}
           name={name}
           position={c.position}
+          locked={c.locked ?? false}
+        />
+      ))}
+
+      {/* Vendors */}
+      {Object.entries(visVendors).map(([name, v]) => (
+        <VendorNode
+          key={name}
+          name={name}
+          position={v.position}
+          locked={v.locked ?? false}
         />
       ))}
 
       {/* Pipes */}
       {visPipes.map((pipe) => {
-        const fromNode = visWarehouses[pipe.from] || visCustomers[pipe.from];
-        const toNode   = visWarehouses[pipe.to]   || visCustomers[pipe.to];
+        const fromNode = visWarehouses[pipe.from] || visCustomers[pipe.from] || visVendors[pipe.from];
+        const toNode   = visWarehouses[pipe.to]   || visCustomers[pipe.to]   || visVendors[pipe.to];
         if (!fromNode || !toNode) return null;
         return (
           <PipeConnection
