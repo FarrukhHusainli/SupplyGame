@@ -1,9 +1,11 @@
 import { sortWarehousesTopological } from './topology';
 import { getWarehouseDirectDemand } from './warehouse_node/out/direct';
-import { getWarehouseIndirectDemand } from './warehouse_node/out/indirect';
+import { getWarehouseIndirectDemand, getWarehouseSourceCount } from './warehouse_node/out/indirect';
 import { getWarehouseGrossDemand } from './warehouse_node/out/gross';
 import { getWarehouseRequestedQty } from './warehouse_node/in/requested';
+import { getWarehouseTransitArriving } from './warehouse_node/in/inbound';
 import { getWarehouseOpeningStock } from './warehouse_node/stock/before_on_hand';
+import { getWarehouseClosingStock } from './warehouse_node/stock/end_on_hand';
 import { getWarehouseSafetyStock } from './warehouse_node/stock/safety_stock';
 
 /**
@@ -66,12 +68,8 @@ export function refreshProjections(warehouses, customers, pipes, currentPeriod) 
       results[name].safety[p] = ss;
 
       // For p=0 count in-transit arrivals in effective opening to avoid over-ordering
-      const opening = getWarehouseOpeningStock(wh, results[name], p);
-      const transitArriving = p === 0
-        ? (wh.inTransit ?? [])
-            .filter((t) => t.arrivalPeriod === currentPeriod)
-            .reduce((s, t) => s + t.qty, 0)
-        : 0;
+      const opening         = getWarehouseOpeningStock(wh, results[name], p);
+      const transitArriving = p === 0 ? getWarehouseTransitArriving(wh, currentPeriod) : 0;
       results[name].required[p] = getWarehouseRequestedQty(
         results[name].grossD[p],
         ss,
@@ -81,24 +79,17 @@ export function refreshProjections(warehouses, customers, pipes, currentPeriod) 
 
     // ── PASS 2: Top-down — constrained fulfillment ────────────────────────
     // shippedToDuring tracks how much each upstream warehouse ships to each
-    // downstream warehouse in this period. Downstream warehouses read this
-    // as their inbound when they are processed later in topological order.
-    const shippedToDuring = {}; // { [toName]: number }
+    // downstream warehouse this period so downstream can read it as their inbound.
+    const shippedToDuring = {};
 
     sortedWhs.forEach((name) => {
       const wh      = warehouses[name];
       const opening = getWarehouseOpeningStock(wh, results[name], p);
 
-      // Inbound: actual arrivals for p=0; constrained upstream shipping for p>0.
-      // Warehouses with no upstream (source nodes) receive 0 for p>0.
-      let inbound;
-      if (p === 0) {
-        inbound = (wh.inTransit ?? [])
-          .filter((t) => t.arrivalPeriod === currentPeriod)
-          .reduce((s, t) => s + t.qty, 0);
-      } else {
-        inbound = shippedToDuring[name] ?? 0;
-      }
+      // p=0: actual in-transit arrivals; p>0: what upstream recorded as shipped
+      const inbound = p === 0
+        ? getWarehouseTransitArriving(wh, currentPeriod)
+        : (shippedToDuring[name] ?? 0);
       results[name].inbound[p] = inbound;
 
       let available = opening + inbound;
@@ -108,20 +99,16 @@ export function refreshProjections(warehouses, customers, pipes, currentPeriod) 
       available -= directServed;
       results[name].directServed[p] = directServed;
 
-      // Indirect demand served second (priority 2), from remaining stock.
-      // Distribute proportionally among downstream warehouses so each downstream
-      // can read its share from shippedToDuring.
+      // Indirect demand served second (priority 2), distributed proportionally
       const downstreamPipes = pipes.filter((c) => c.from === name && warehouses[c.to]);
       let indirectServed = 0;
 
       if (downstreamPipes.length > 0 && results[name].indirectD[p] > 0) {
         const capacity = Math.min(results[name].indirectD[p], Math.max(0, available));
         downstreamPipes.forEach((conn) => {
-          const sources = pipes.filter((c) => c.to === conn.to && warehouses[c.from]);
-          const share = results[conn.to].grossD[p] / (sources.length || 1);
+          const share      = results[conn.to].grossD[p] / getWarehouseSourceCount(conn.to, pipes, warehouses);
           const proportion = share / results[name].indirectD[p];
-          const shipped = capacity * proportion;
-          shippedToDuring[conn.to] = (shippedToDuring[conn.to] ?? 0) + shipped;
+          shippedToDuring[conn.to] = (shippedToDuring[conn.to] ?? 0) + capacity * proportion;
         });
         indirectServed = capacity;
       } else {
@@ -129,10 +116,7 @@ export function refreshProjections(warehouses, customers, pipes, currentPeriod) 
       }
 
       results[name].indirectServed[p] = indirectServed;
-      results[name].projected[p] = Math.max(
-        0,
-        opening + inbound - directServed - indirectServed,
-      );
+      results[name].projected[p] = getWarehouseClosingStock(opening, inbound, directServed + indirectServed);
     });
   }
 

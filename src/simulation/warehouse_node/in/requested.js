@@ -1,5 +1,5 @@
 /**
- * Calculates the requested supply quantity for a warehouse node.
+ * Calculates the requested inbound quantity for a warehouse node.
  * This is typically based on gross demand, safety stock, and opening inventory.
  * 
  * @param {number} grossDemand - The calculated gross demand for the period.

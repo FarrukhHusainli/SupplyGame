@@ -1,6 +1,8 @@
 import { sortWarehousesTopological } from './topology';
 import { refreshProjections } from './projections';
 import { getCustomerRequestedQty } from './customer_node/in/requested';
+import { getWarehouseTransitArriving } from './warehouse_node/in/inbound';
+import { getWarehouseSourceCount } from './warehouse_node/out/indirect';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -69,7 +71,7 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
     custMetrics[name] = {
       period:    currentPeriod,
       demand:    getCustomerRequestedQty(),
-      backorder: activeCusts[name].backorder ?? 0, // pre-period backorder (restored on goBack)
+      backorder: activeCusts[name].backorder ?? 0,
       supplied:  0,
       shortage:  0,
     };
@@ -80,10 +82,11 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
     const wh = activeWhs[name];
     if (!wh.inTransit) wh.inTransit = [];
     const arrivals = shuffle(wh.inTransit.filter((t) => t.arrivalPeriod === currentPeriod));
-    arrivals.forEach((t) => {
-      wh.currentStock += t.qty;
-      metrics[name].inboundReceived += t.qty;
-    });
+    arrivals.forEach((t) => { wh.currentStock += t.qty; });
+    metrics[name].inboundReceived = getWarehouseTransitArriving(
+      { inTransit: arrivals }, // already filtered to this period
+      currentPeriod,
+    );
     wh.inTransit = wh.inTransit.filter((t) => t.arrivalPeriod !== currentPeriod);
   });
 
@@ -91,18 +94,23 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
   sorted.forEach((name) => {
     const wh = activeWhs[name];
 
-    // Direct demand connections (to customers) — shuffle for random order
-    const directPipes   = shuffle(activePipes.filter((p) => p.from === name && activeCusts[p.to]));
-    // Indirect demand connections (to downstream warehouses) — shuffle for random order
-    const indirectPipes = shuffle(activePipes.filter((p) => p.from === name && activeWhs[p.to]));
+    // Single pass: categorise outbound pipes into direct (→ customer) and indirect (→ warehouse)
+    const direct = [], indirect = [];
+    activePipes.forEach((p) => {
+      if (p.from !== name) return;
+      if (activeCusts[p.to])  direct.push(p);
+      else if (activeWhs[p.to]) indirect.push(p);
+    });
+    const directPipes   = shuffle(direct);
+    const indirectPipes = shuffle(indirect);
 
     // Direct outbounds first — backorder carries over to next period
     directPipes.forEach((conn) => {
-      const cust         = activeCusts[conn.to];
+      const cust          = activeCusts[conn.to];
       const prevBackorder = cust.backorder ?? 0;
-      const totalDemand  = getCustomerRequestedQty() + prevBackorder;
-      const shipped      = Math.min(totalDemand, Math.max(0, wh.currentStock));
-      const shortage     = totalDemand - shipped;
+      const totalDemand   = getCustomerRequestedQty() + prevBackorder;
+      const shipped       = Math.min(totalDemand, Math.max(0, wh.currentStock));
+      const shortage      = totalDemand - shipped;
 
       wh.currentStock            -= shipped;
       cust.backorder              = shortage;
@@ -117,12 +125,9 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
 
     // Indirect outbounds second — constrained by remaining available stock
     indirectPipes.forEach((conn) => {
-      // Use required[0] (adjusted for transit arrivals) so we don't over-ship
-      // to a downstream warehouse that already has in-transit goods arriving.
-      const needed  = projections[conn.to]?.required[0] ?? 0;
-      const sources = activePipes.filter((c) => c.to === conn.to && activeWhs[c.from]);
-      const share   = needed / (sources.length || 1);
-      const shipped = Math.min(share, Math.max(0, wh.currentStock));
+      const needed   = projections[conn.to]?.required[0] ?? 0;
+      const share    = needed / getWarehouseSourceCount(conn.to, activePipes, activeWhs);
+      const shipped  = Math.min(share, Math.max(0, wh.currentStock));
       const leadTime = conn.leadTime ?? 0;
 
       wh.currentStock              -= shipped;
@@ -130,7 +135,6 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
       metrics[name].outbound       += shipped;
 
       if (leadTime === 0) {
-        // Immediate transfer (lead time zero)
         activeWhs[conn.to].currentStock += shipped;
       } else {
         if (!activeWhs[conn.to].inTransit) activeWhs[conn.to].inTransit = [];

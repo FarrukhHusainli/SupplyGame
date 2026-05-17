@@ -1,19 +1,15 @@
+import { getWarehouseOpeningStock } from './before_on_hand';
+
 /**
- * Calculates the available stock in a warehouse node for a given period.
- * This is the quantity that can be allocated to downstream nodes.
+ * Returns the available stock for a warehouse for period p.
+ * Delegates to getWarehouseOpeningStock — conceptually distinct (available stock
+ * may diverge once reservations or in-transit offsets are introduced).
  *
- * Currently: available stock = stock before on hand (opening stock).
- *   - p=0 → warehouse.currentStock (actual on-hand now)
- *   - p>0 → proj.projected[p-1]   (closing stock of previous period)
- *
- * In future iterations this function will incorporate in-transit stock,
- * reservations, and other allocation logic.
- *
- * @param {Object} warehouse - The warehouse node object ({ currentStock, ... }).
- * @param {Object} results   - Projection results for this warehouse ({ projected: number[] }).
+ * @param {Object} warehouse - The warehouse node object.
+ * @param {Object} results   - Projection results for this warehouse.
  * @param {number} p         - Period index (0 = current period).
- * @returns {number} Available stock quantity.
+ * @returns {number}
  */
 export function getWarehouseAvailableStock(warehouse, results, p) {
-    return p === 0 ? warehouse.currentStock : (results?.projected?.[p - 1] ?? 0);
+  return getWarehouseOpeningStock(warehouse, results, p);
 }

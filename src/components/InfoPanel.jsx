@@ -91,9 +91,9 @@ function WarehousePanel({ name }) {
         </div>
       </div>
 
-      {/* Supply section */}
+      {/* Inbound section */}
       <div className="flex gap-1 mb-3">
-        <SectionLabel>Supply</SectionLabel>
+        <SectionLabel>Inbound</SectionLabel>
         <div className="flex-1">
           <div className="grid px-2 py-0.5 mb-1"
             style={{ gridTemplateColumns: '28px 1fr 1fr', fontSize: '0.55rem', color: '#64748b', fontWeight: 800 }}>
