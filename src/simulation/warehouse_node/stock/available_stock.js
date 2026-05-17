@@ -15,5 +15,5 @@
  * @returns {number} Available stock quantity.
  */
 export function getWarehouseAvailableStock(warehouse, results, p) {
-  return p === 0 ? warehouse.currentStock : (results?.projected?.[p - 1] ?? 0);
+    return p === 0 ? warehouse.currentStock : (results?.projected?.[p - 1] ?? 0);
 }
