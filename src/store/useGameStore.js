@@ -1,13 +1,12 @@
 import { create } from 'zustand';
 import { refreshProjections } from '../simulation/projections';
-import { advanceWeekLogic, goBackWeekLogic } from '../simulation/weekAdvance';
+import { advancePeriodLogic, goBackPeriodLogic } from '../simulation/periodAdvance';
 import { saveStateToDB, resetDatabase as dbReset, saveInitialToDB, loadInitialFromDB } from '../db/firebase';
-import { getCustomerGrossDemand } from '../simulation/customer_node/out/gross';
 
 /**
  * Central game store.
  * warehouses: { [name]: { position:[x,y,z], currentStock:number, initialStock:number, history:[] } }
- * customers:  { [name]: { position:[x,y,z], demand:[{original,supplied},...], history:[] } }
+ * customers:  { [name]: { position:[x,y,z], history:[] } }
  * pipes:      [{ id, from, to, leadTime }]
  */
 const useGameStore = create((set, get) => ({
@@ -25,7 +24,7 @@ const useGameStore = create((set, get) => ({
   isPaused: false,
   lastPeriodTime: 0,
 
-  // ── Projection cache (invalidated each week) ────────────
+  // ── Projection cache (invalidated each period) ───────────
   _projCache: null,
   lastProjectionPeriod: -1,
 
@@ -141,10 +140,9 @@ const useGameStore = create((set, get) => ({
 
   addCustomer: (name, position) => {
     get().pushHistory();
-    const demand = Array.from({ length: 12 }, () => getCustomerGrossDemand());
     const createdAtPeriod = get().currentPeriod;
     set((s) => ({
-      customers: { ...s.customers, [name]: { position, demand, history: [], createdAtPeriod } },
+      customers: { ...s.customers, [name]: { position, history: [], createdAtPeriod } },
     }));
     get()._persist();
   },
@@ -322,20 +320,16 @@ const useGameStore = create((set, get) => ({
 
   advancePeriod: () => {
     const s = get();
-    const result = advanceWeekLogic(s);
-    // Ensure currentPeriod is updated even if logic returns currentWeek
-    const nextPeriod = result.currentPeriod || result.currentWeek || s.currentPeriod + 1;
-    
+    const result = advancePeriodLogic(s);
+    const nextPeriod = result.currentPeriod ?? s.currentPeriod + 1;
     set({ ...result, currentPeriod: nextPeriod, _projCache: null, lastProjectionPeriod: -1 });
     get()._persist();
   },
 
   goBackPeriod: () => {
     const s = get();
-    const result = goBackWeekLogic(s);
-    // Ensure currentPeriod is updated even if logic returns currentWeek
-    const prevPeriod = result.currentPeriod || result.currentWeek || Math.max(1, s.currentPeriod - 1);
-
+    const result = goBackPeriodLogic(s);
+    const prevPeriod = result.currentPeriod ?? Math.max(1, s.currentPeriod - 1);
     set({ ...result, currentPeriod: prevPeriod, _projCache: null, lastProjectionPeriod: -1 });
     get()._persist();
   },

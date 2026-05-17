@@ -86,7 +86,7 @@ export default function SupplyManager() {
                     <span className="text-slate-500 text-[0.6rem] font-bold uppercase">({nodeTypeLabel(p.to)})</span>
                   </div>
                   <div className="flex gap-2 items-center">
-                    <label className="text-[0.6rem] text-slate-500 font-bold uppercase tracking-wider">Lead Time (weeks)</label>
+                    <label className="text-[0.6rem] text-slate-500 font-bold uppercase tracking-wider">Lead Time (periods)</label>
                     <input
                       className="input h-8 w-20 text-right text-sm"
                       type="number" min="0" step="0.5"
@@ -113,7 +113,7 @@ export default function SupplyManager() {
                       <span className="text-amber-400">{p.to}</span>
                       <span className="text-slate-500 text-[0.6rem] font-bold uppercase">({nodeTypeLabel(p.to)})</span>
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5">Lead time: {p.leadTime} week{p.leadTime !== 1 ? 's' : ''}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Lead time: {p.leadTime} period{p.leadTime !== 1 ? 's' : ''}</div>
                   </div>
                   <button onClick={() => setEditing({ id: p.id, leadTime: String(p.leadTime) })}
                     className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 rounded-lg flex-shrink-0 transition-colors"
@@ -157,7 +157,7 @@ export default function SupplyManager() {
         </div>
         <div className="flex gap-2 items-end">
           <div className="flex-1">
-            <label className="text-xs text-slate-500 font-semibold mb-1 block">Lead Time (weeks)</label>
+            <label className="text-xs text-slate-500 font-semibold mb-1 block">Lead Time (periods)</label>
             <input type="number" min="0" step="0.5" className="input" value={cuLt} onChange={(e) => setCuLt(e.target.value)} />
           </div>
           <button className="btn-primary h-9 px-4 text-sm" onClick={handleAddCustomer}>Add</button>
@@ -188,7 +188,7 @@ export default function SupplyManager() {
         </div>
         <div className="flex gap-2 items-end">
           <div className="flex-1">
-            <label className="text-xs text-slate-500 font-semibold mb-1 block">Lead Time (weeks)</label>
+            <label className="text-xs text-slate-500 font-semibold mb-1 block">Lead Time (periods)</label>
             <input type="number" min="0" step="0.5" className="input" value={vnLt} onChange={(e) => setVnLt(e.target.value)} />
           </div>
           <button className="h-9 px-4 text-sm rounded-lg font-semibold text-purple-300"

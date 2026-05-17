@@ -1,12 +1,22 @@
+import { getCustomerRequestedQty } from '../../customer_node/in/requested';
+
 /**
  * Calculates the direct demand for a warehouse node.
- * Currently fixed at 0 units per period.
- * 
+ * Direct demand is the total demand from customers directly connected to this warehouse.
+ * Each connected customer contributes a fixed 100 units per period.
+ *
  * @param {string} name - Warehouse name.
  * @param {Object} customers - Map of customer nodes.
- * @param {Array} pipes - Array of pipe connections.
- * @param {number} p - Period index.
+ * @param {Array}  pipes - Array of pipe connections.
+ * @param {number} p - Period index (unused — demand is constant).
+ * @returns {number} Total direct demand from all connected customers.
  */
 export function getWarehouseDirectDemand(name, customers, pipes, p) {
-  return 0;
+  let total = 0;
+  pipes.forEach((conn) => {
+    if (conn.from === name && customers[conn.to]) {
+      total += getCustomerRequestedQty();
+    }
+  });
+  return total;
 }

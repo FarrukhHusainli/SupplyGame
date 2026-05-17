@@ -24,7 +24,7 @@ function openDB() {
 
 /**
  * Persist current game state to IndexedDB.
- * @param {{ warehouses, customers, pipes, currentWeek }} state
+ * @param {{ warehouses, customers, pipes, currentPeriod }} state
  */
 export async function saveStateToDB(state) {
   try {
@@ -38,7 +38,7 @@ export async function saveStateToDB(state) {
 
 /**
  * Load game state from IndexedDB.
- * @returns {{ warehouses, customers, pipes, currentWeek } | null}
+ * @returns {{ warehouses, customers, pipes, currentPeriod } | null}
  */
 export async function loadFromDB() {
   try {

@@ -5,7 +5,7 @@
  * 
  * @param {Object} warehouse - The warehouse node object.
  * @param {Object} results - The accumulated projection results for all warehouses.
- * @param {number} p - The current period index (0 for current week).
+ * @param {number} p - The current period index (0 for the current period).
  * @returns {number} The opening stock quantity.
  */
 export function getWarehouseOpeningStock(warehouse, results, p) {

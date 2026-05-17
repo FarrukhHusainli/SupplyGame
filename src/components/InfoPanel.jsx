@@ -1,6 +1,10 @@
 import useUIStore from '../store/useUIStore';
 import useGameStore from '../store/useGameStore';
 import { getWarehouseClosingStockMinusSafety } from '../simulation/warehouse_node/stock/end_on_hand_safety_stock';
+import { getWarehouseAvailableStock } from '../simulation/warehouse_node/stock/available_stock';
+import { getCustomerSuppliedQty } from '../simulation/customer_node/in/inbound';
+
+
 
 const fmt = (n) => (typeof n === 'number' ? Math.floor(n).toLocaleString('fr-FR') : n ?? '—');
 
@@ -105,11 +109,10 @@ function WarehousePanel({ name }) {
               <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket} columns="28px 1fr 1fr"
                 cells={<>
                   <span className="val-neu text-right">{fmt(isPast ? h.req : proj.required?.[p])}</span>
-                  <span className={`text-right ${
-                    (isPast ? h.recv : proj.inbound?.[p]) >= (isPast ? h.req : proj.required?.[p])
+                  <span className={`text-right ${(isPast ? h.recv : proj.inbound?.[p]) >= (isPast ? h.req : proj.required?.[p])
                       ? 'val-pos'
                       : 'val-neg'
-                  }`}>{fmt(isPast ? h.recv : proj.inbound?.[p])}</span>
+                    }`}>{fmt(isPast ? h.recv : proj.inbound?.[p])}</span>
                 </>}
               />
             );
@@ -154,9 +157,21 @@ function WarehousePanel({ name }) {
 }
 
 function CustomerPanel({ name }) {
-  const { customers, currentPeriod, timeBucket } = useGameStore();
+  const { customers, warehouses, pipes, currentPeriod, timeBucket, getProjections } = useGameStore();
   const cust = customers[name];
   if (!cust) return null;
+
+  // Single supplying pipe (from a warehouse to this customer)
+  const supplierPipe = pipes.find((c) => c.to === name && warehouses[c.from]);
+  const projections   = getProjections();
+
+  const supplierWh = supplierPipe ? warehouses[supplierPipe.from] : null;
+  const supplierProj = supplierPipe ? projections[supplierPipe.from] : null;
+
+  const availableAt = (p) => {
+    if (!supplierWh) return 0;
+    return getWarehouseAvailableStock(supplierWh, supplierProj, p);
+  };
 
   const periods = [-3, -2, -1, 0, 1, 2];
 
@@ -165,20 +180,31 @@ function CustomerPanel({ name }) {
       <SectionLabel>Demand</SectionLabel>
       <div className="flex-1">
         <div className="grid px-2 py-0.5 mb-1"
-          style={{ gridTemplateColumns: '28px 1fr', fontSize: '0.55rem', color: '#64748b', fontWeight: 800 }}>
-          <span>{BUCKET_PREFIX[timeBucket] || 'PRD'}</span><span className="text-right">FULFILLMENT / REQ</span>
+          style={{ gridTemplateColumns: '28px 1fr 1fr', fontSize: '0.55rem', color: '#64748b', fontWeight: 800 }}>
+          <span>{BUCKET_PREFIX[timeBucket] || 'PRD'}</span>
+          <span className="text-right">REQ</span>
+          <span className="text-right">SUPPLIED</span>
         </div>
         {periods.map((p) => {
           const w = currentPeriod + p;
           if (w <= 0) return null;
           const isPast = p < 0, isCurrent = p === 0;
           const h = isPast ? (cust.history || []).find((x) => x.period === w) : null;
-          const d = isPast ? h?.demand : cust.demand[p];
-          if (!d) return null;
-          const val = typeof d === 'object' ? `${fmt(d.supplied)} / ${fmt(d.original)}` : fmt(d);
+          if (isPast && !h) return null;
+
+          const req      = isPast ? (h.demand ?? 100) : 100;
+          const supplied = isPast
+            ? (h.supplied ?? 0)
+            : getCustomerSuppliedQty(req, availableAt(p));
+
           return (
-            <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket} columns="28px 1fr"
-              cells={<span className="val-neu text-right">{val}</span>}
+            <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket} columns="28px 1fr 1fr"
+              cells={<>
+                <span className="val-neu text-right">{fmt(req)}</span>
+                <span className={`text-right ${supplied >= req ? 'val-pos' : 'val-neg'}`}>
+                  {fmt(supplied)}
+                </span>
+              </>}
             />
           );
         })}
@@ -186,6 +212,7 @@ function CustomerPanel({ name }) {
     </div>
   );
 }
+
 
 function PipePanel({ pipeId }) {
   const timeBucket = useGameStore((s) => s.timeBucket);
@@ -212,24 +239,24 @@ function PipePanel({ pipeId }) {
 export default function InfoPanel() {
   const { selectedId, selectedType, clearSelection } = useUIStore();
   const deleteWarehouse = useGameStore((s) => s.deleteWarehouse);
-  const deleteCustomer  = useGameStore((s) => s.deleteCustomer);
-  const deletePipe      = useGameStore((s) => s.deletePipe);
-  const toggleLock      = useGameStore((s) => s.toggleLock);
-  const pipes           = useGameStore((s) => s.pipes);
-  const warehouses      = useGameStore((s) => s.warehouses);
-  const customers       = useGameStore((s) => s.customers);
-  const vendors         = useGameStore((s) => s.vendors);
+  const deleteCustomer = useGameStore((s) => s.deleteCustomer);
+  const deletePipe = useGameStore((s) => s.deletePipe);
+  const toggleLock = useGameStore((s) => s.toggleLock);
+  const pipes = useGameStore((s) => s.pipes);
+  const warehouses = useGameStore((s) => s.warehouses);
+  const customers = useGameStore((s) => s.customers);
+  const vendors = useGameStore((s) => s.vendors);
 
   // For pipes, show "FROM → TO" instead of the raw internal ID
   const selectedPipe = selectedType === 'pipe' ? pipes.find((p) => p.id === selectedId) : null;
-  const displayName  = selectedPipe ? `${selectedPipe.from} → ${selectedPipe.to}` : selectedId;
+  const displayName = selectedPipe ? `${selectedPipe.from} → ${selectedPipe.to}` : selectedId;
 
   // Lock state for the selected node
   const isLocked =
     selectedType === 'warehouse' ? (warehouses[selectedId]?.locked ?? false) :
-    selectedType === 'customer'  ? (customers[selectedId]?.locked  ?? false) :
-    selectedType === 'vendor'    ? (vendors[selectedId]?.locked    ?? false) :
-    false;
+      selectedType === 'customer' ? (customers[selectedId]?.locked ?? false) :
+        selectedType === 'vendor' ? (vendors[selectedId]?.locked ?? false) :
+          false;
 
   const canLock = selectedType === 'warehouse' || selectedType === 'customer' || selectedType === 'vendor';
 
@@ -245,8 +272,8 @@ export default function InfoPanel() {
 
   const typeLabel =
     selectedType === 'warehouse' ? '🏭 Warehouse' :
-    selectedType === 'customer' ? '👥 Customer' :
-    '🔗 Pipe';
+      selectedType === 'customer' ? '👥 Customer' :
+        '🔗 Pipe';
 
   return (
     <div

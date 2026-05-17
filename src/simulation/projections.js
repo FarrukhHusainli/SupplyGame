@@ -14,9 +14,9 @@ import { getWarehouseSafetyStock } from './warehouse_node/stock/safety_stock';
  * @param {Object} warehouses  - { [name]: { currentStock, demand?, ... } }
  * @param {Object} customers   - { [name]: { demand: [{original, supplied}] } }
  * @param {Array}  pipes       - [{ from, to, leadTime }]
- * @param {number} currentWeek - current week number (used as cache key externally)
+ * @param {number} currentPeriod - current period number (used as cache key externally)
  */
-export function refreshProjections(warehouses, customers, pipes, currentWeek) {
+export function refreshProjections(warehouses, customers, pipes, currentPeriod) {
   const whNames = Object.keys(warehouses);
   const results = {};
 
@@ -76,8 +76,8 @@ export function refreshProjections(warehouses, customers, pipes, currentWeek) {
 /**
  * Get projection data for a single warehouse.
  */
-export function computeWarehouseStock(warehouseName, warehouses, customers, pipes, currentWeek) {
-  const cache = refreshProjections(warehouses, customers, pipes, currentWeek);
+export function computeWarehouseStock(warehouseName, warehouses, customers, pipes, currentPeriod) {
+  const cache = refreshProjections(warehouses, customers, pipes, currentPeriod);
   return (
     cache[warehouseName] || {
       projected: Array(10).fill(0),

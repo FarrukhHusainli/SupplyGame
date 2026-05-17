@@ -7,6 +7,5 @@
  * @returns {number}
  */
 export function getCustomerSuppliedQty(requestedQty, availableStock) {
-  // Logic to handle stock-outs can be added here in the future
-  return requestedQty;
+  return Math.min(requestedQty, Math.max(0, availableStock));
 }

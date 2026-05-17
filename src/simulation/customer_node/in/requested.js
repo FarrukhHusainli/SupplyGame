@@ -1,11 +1,14 @@
 /**
- * Calculates how much a customer node requests from its upstream source.
- * Currently, it simply returns the original demand for the given period.
- * 
- * @param {Object} customer - The customer node object.
- * @param {number} periodIndex - The index in the demand array (0 for current week).
- * @returns {number}
+ * The fixed demand a customer node places on its upstream source each period.
  */
-export function getCustomerRequestedQty(customer, periodIndex = 0) {
-  return customer.demand[periodIndex]?.original ?? 0;
+export const CUSTOMER_DEMAND_PER_PERIOD = 100;
+
+/**
+ * Returns the quantity a customer requests from its upstream warehouse for a given period.
+ * Demand is a constant 100 units per period regardless of period index.
+ *
+ * @returns {number} Always 100.
+ */
+export function getCustomerRequestedQty() {
+  return CUSTOMER_DEMAND_PER_PERIOD;
 }

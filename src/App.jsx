@@ -133,7 +133,7 @@ function SceneContent() {
 
 export default function App() {
   const hydrate = useGameStore((s) => s.hydrate);
-  const setLastWeekTime = useGameStore((s) => s.setLastPeriodTime);
+  const setLastPeriodTime = useGameStore((s) => s.setLastPeriodTime);
   const lightMode = useUIStore((s) => s.lightMode);
 
   // Load from Firebase on mount
@@ -143,9 +143,9 @@ export default function App() {
         const { key, ...data } = saved;
         hydrate(data);
       }
-      setLastWeekTime(performance.now());
+      setLastPeriodTime(performance.now());
     });
-  }, [hydrate, setLastWeekTime]);
+  }, [hydrate, setLastPeriodTime]);
 
   // Global Ctrl+Z / Cmd+Z → undo (skip when typing in an input)
   useEffect(() => {
