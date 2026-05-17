@@ -131,7 +131,7 @@ const useGameStore = create((set, get) => ({
     set((s) => ({
       warehouses: {
         ...s.warehouses,
-        [name]: { position, currentStock: initialStock, initialStock, history: [], createdAtPeriod },
+        [name]: { position, currentStock: initialStock, initialStock, history: [], inTransit: [], createdAtPeriod },
       },
       _projCache: null,
     }));
@@ -142,7 +142,7 @@ const useGameStore = create((set, get) => ({
     get().pushHistory();
     const createdAtPeriod = get().currentPeriod;
     set((s) => ({
-      customers: { ...s.customers, [name]: { position, history: [], createdAtPeriod } },
+      customers: { ...s.customers, [name]: { position, history: [], backorder: 0, createdAtPeriod } },
     }));
     get()._persist();
   },
