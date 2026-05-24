@@ -3,6 +3,8 @@ import useGameStore from '../store/useGameStore';
 import { getWarehouseClosingStockMinusSafety } from '../simulation/warehouse_node/stock/end_on_hand_safety_stock';
 import { getWarehouseAvailableStock } from '../simulation/warehouse_node/stock/available_stock';
 import { getCustomerSuppliedQty } from '../simulation/customer_node/in/inbound';
+import { getCustomerDemand } from '../simulation/customer_node/in/demand';
+import { getCustomerBacklog } from '../simulation/customer_node/in/backlog';
 
 
 
@@ -161,11 +163,9 @@ function CustomerPanel({ name }) {
   const cust = customers[name];
   if (!cust) return null;
 
-  // Single supplying pipe (from a warehouse to this customer)
   const supplierPipe = pipes.find((c) => c.to === name && warehouses[c.from]);
-  const projections   = getProjections();
-
-  const supplierWh = supplierPipe ? warehouses[supplierPipe.from] : null;
+  const projections  = getProjections();
+  const supplierWh   = supplierPipe ? warehouses[supplierPipe.from] : null;
   const supplierProj = supplierPipe ? projections[supplierPipe.from] : null;
 
   const availableAt = (p) => {
@@ -173,6 +173,7 @@ function CustomerPanel({ name }) {
     return getWarehouseAvailableStock(supplierWh, supplierProj, p);
   };
 
+  const COLS = '28px 0.7fr 0.8fr 0.8fr 1fr';
   const periods = [-3, -2, -1, 0, 1, 2];
 
   return (
@@ -180,10 +181,12 @@ function CustomerPanel({ name }) {
       <SectionLabel>Demand</SectionLabel>
       <div className="flex-1">
         <div className="grid px-2 py-0.5 mb-1"
-          style={{ gridTemplateColumns: '28px 1fr 1fr', fontSize: '0.55rem', color: '#64748b', fontWeight: 800 }}>
+          style={{ gridTemplateColumns: COLS, fontSize: '0.55rem', color: '#64748b', fontWeight: 800 }}>
           <span>{BUCKET_PREFIX[timeBucket] || 'PRD'}</span>
+          <span className="text-right">DMD</span>
+          <span className="text-right">BKLOG</span>
           <span className="text-right">REQ</span>
-          <span className="text-right">SUPPLIED</span>
+          <span className="text-right">SUPPL</span>
         </div>
         {periods.map((p) => {
           const w = currentPeriod + p;
@@ -192,16 +195,20 @@ function CustomerPanel({ name }) {
           const h = isPast ? (cust.history || []).find((x) => x.period === w) : null;
           if (isPast && !h) return null;
 
-          const req      = isPast ? (h.demand ?? 100) : 100;
+          const demand   = isPast ? (h.demand   ?? getCustomerDemand()) : getCustomerDemand();
+          const backlog  = isPast ? (h.backorder ?? 0) : (isCurrent ? getCustomerBacklog(cust) : 0);
+          const req      = demand + backlog;
           const supplied = isPast
             ? (h.supplied ?? 0)
             : getCustomerSuppliedQty(req, availableAt(p));
 
           return (
-            <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket} columns="28px 1fr 1fr"
+            <DataRow key={p} period={w} isPast={isPast} isCurrent={isCurrent} bucket={timeBucket} columns={COLS}
               cells={<>
+                <span className="val-neu text-right">{fmt(demand)}</span>
+                <span className={`text-right ${backlog > 0 ? 'val-neg' : 'val-neu'}`}>{fmt(backlog)}</span>
                 <span className="val-neu text-right">{fmt(req)}</span>
-                <span className={`text-right ${supplied >= req ? 'val-pos' : 'val-neg'}`}>
+                <span className={`text-right ${supplied >= demand ? 'val-pos' : 'val-neg'}`}>
                   {fmt(supplied)}
                 </span>
               </>}

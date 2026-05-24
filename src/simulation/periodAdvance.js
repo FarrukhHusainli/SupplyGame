@@ -1,6 +1,8 @@
 import { sortWarehousesTopological } from './topology';
 import { refreshProjections } from './projections';
 import { getCustomerRequestedQty } from './customer_node/in/requested';
+import { getCustomerDemand } from './customer_node/in/demand';
+import { getCustomerBacklog } from './customer_node/in/backlog';
 import { getWarehouseTransitArriving } from './warehouse_node/in/inbound';
 import { getWarehouseSourceCount } from './warehouse_node/out/indirect';
 
@@ -70,8 +72,8 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
   Object.keys(activeCusts).forEach((name) => {
     custMetrics[name] = {
       period:    currentPeriod,
-      demand:    getCustomerRequestedQty(),
-      backorder: activeCusts[name].backorder ?? 0,
+      demand:    getCustomerDemand(),
+      backorder: getCustomerBacklog(activeCusts[name]),
       supplied:  0,
       shortage:  0,
     };
@@ -107,10 +109,7 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
     // Direct outbounds first — backorder carries over to next period
     directPipes.forEach((conn) => {
       const cust          = activeCusts[conn.to];
-      // Ignore stored backorder if the customer has no simulation history yet —
-      // this prevents stale values persisted from a previous session from inflating demand.
-      const prevBackorder = (cust.history?.length ?? 0) > 0 ? (cust.backorder ?? 0) : 0;
-      const totalDemand   = getCustomerRequestedQty() + prevBackorder;
+      const totalDemand = getCustomerRequestedQty(cust);
       const shipped       = Math.min(totalDemand, Math.max(0, wh.currentStock));
       const shortage      = totalDemand - shipped;
 
@@ -121,7 +120,7 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
 
       if (custMetrics[conn.to]) {
         custMetrics[conn.to].supplied = Math.min(
-          getCustomerRequestedQty(),
+          getCustomerDemand(),
           custMetrics[conn.to].supplied + shipped,
         );
         custMetrics[conn.to].shortage = shortage;

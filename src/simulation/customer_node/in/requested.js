@@ -1,14 +1,12 @@
-/**
- * The fixed demand a customer node places on its upstream source each period.
- */
-export const CUSTOMER_DEMAND_PER_PERIOD = 100;
+import { getCustomerDemand } from './demand';
+import { getCustomerBacklog } from './backlog';
 
 /**
- * Returns the quantity a customer requests from its upstream warehouse for a given period.
- * Demand is a constant 100 units per period regardless of period index.
+ * Total quantity a customer requests this period: base demand + any backlog.
  *
- * @returns {number} Always 100.
+ * @param {Object} customer - Customer node object.
+ * @returns {number}
  */
-export function getCustomerRequestedQty() {
-  return CUSTOMER_DEMAND_PER_PERIOD;
+export function getCustomerRequestedQty(customer) {
+  return getCustomerDemand() + getCustomerBacklog(customer);
 }

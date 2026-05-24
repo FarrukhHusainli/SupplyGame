@@ -1,4 +1,4 @@
-import { getCustomerRequestedQty } from '../../customer_node/in/requested';
+import { getCustomerDemand } from '../../customer_node/in/demand';
 
 /**
  * Calculates the direct demand for a warehouse node.
@@ -15,7 +15,7 @@ export function getWarehouseDirectDemand(name, customers, pipes, p) {
   let total = 0;
   pipes.forEach((conn) => {
     if (conn.from === name && customers[conn.to]) {
-      total += getCustomerRequestedQty();
+      total += getCustomerDemand();
     }
   });
   return total;
