@@ -107,7 +107,9 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
     // Direct outbounds first — backorder carries over to next period
     directPipes.forEach((conn) => {
       const cust          = activeCusts[conn.to];
-      const prevBackorder = cust.backorder ?? 0;
+      // Ignore stored backorder if the customer has no simulation history yet —
+      // this prevents stale values persisted from a previous session from inflating demand.
+      const prevBackorder = (cust.history?.length ?? 0) > 0 ? (cust.backorder ?? 0) : 0;
       const totalDemand   = getCustomerRequestedQty() + prevBackorder;
       const shipped       = Math.min(totalDemand, Math.max(0, wh.currentStock));
       const shortage      = totalDemand - shipped;
@@ -118,7 +120,10 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
       metrics[name].outbound     += shipped;
 
       if (custMetrics[conn.to]) {
-        custMetrics[conn.to].supplied = shipped;
+        custMetrics[conn.to].supplied = Math.min(
+          getCustomerRequestedQty(),
+          custMetrics[conn.to].supplied + shipped,
+        );
         custMetrics[conn.to].shortage = shortage;
       }
     });
