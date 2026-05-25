@@ -37,7 +37,18 @@ const useGameStore = create((set, get) => ({
   _simBaseline: null,  // deep-copy of state at the moment simulation was entered
 
   // ── Hydrate from DB ─────────────────────────────────────
-  hydrate: (data) => set({ ...data, _projCache: null, lastProjectionPeriod: -1 }),
+  hydrate: (data) => {
+    // Repair: if a warehouse has no simulation history its currentStock should equal
+    // initialStock. This corrects state corrupted by the stale-backorder bug where
+    // the simulation over-shipped in period 1 and that depleted stock was persisted.
+    const warehouses = {};
+    Object.entries(data.warehouses ?? {}).forEach(([name, wh]) => {
+      warehouses[name] = (wh.history?.length ?? 0) === 0
+        ? { ...wh, currentStock: wh.initialStock ?? wh.currentStock }
+        : wh;
+    });
+    set({ ...data, warehouses, _projCache: null, lastProjectionPeriod: -1 });
+  },
 
   // ── Snapshot helpers ────────────────────────────────────
   /** Deep-copy the four mutable collections (used for undo & simulation baseline). */

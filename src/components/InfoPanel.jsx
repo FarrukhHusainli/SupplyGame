@@ -163,14 +163,25 @@ function CustomerPanel({ name }) {
   const cust = customers[name];
   if (!cust) return null;
 
-  const supplierPipe = pipes.find((c) => c.to === name && warehouses[c.from]);
-  const projections  = getProjections();
-  const supplierWh   = supplierPipe ? warehouses[supplierPipe.from] : null;
-  const supplierProj = supplierPipe ? projections[supplierPipe.from] : null;
+  const projections = getProjections();
 
+  // For a given period offset p, sum available stock only from warehouses whose
+  // pipe to this customer is active at that target period.
+  // Pipes with createdAtPeriod > currentPeriod+p are not yet active and are excluded.
+  // Warehouses not yet in the projection window (future createdAtPeriod) fall back
+  // to their currentStock as a static upper-bound estimate.
   const availableAt = (p) => {
-    if (!supplierWh) return 0;
-    return getWarehouseAvailableStock(supplierWh, supplierProj, p);
+    const targetPeriod = currentPeriod + p;
+    return pipes
+      .filter(c => c.to === name
+        && warehouses[c.from]
+        && (c.createdAtPeriod ?? 1) <= targetPeriod)
+      .reduce((total, pipe) => {
+        const wh   = warehouses[pipe.from];
+        const proj = projections[pipe.from];
+        if (!proj) return total + Math.max(0, wh.currentStock ?? 0);
+        return total + getWarehouseAvailableStock(wh, proj, p);
+      }, 0);
   };
 
   const COLS = '28px 0.7fr 0.8fr 0.8fr 1fr';

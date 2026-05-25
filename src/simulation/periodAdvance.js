@@ -38,6 +38,14 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
   const whs  = JSON.parse(JSON.stringify(warehouses));
   const custs = JSON.parse(JSON.stringify(customers));
 
+  // Repair: for warehouses with no simulation history currentStock must equal
+  // initialStock. Guards against corrupted persisted state.
+  Object.values(whs).forEach(wh => {
+    if ((wh.history?.length ?? 0) === 0) {
+      wh.currentStock = wh.initialStock ?? wh.currentStock;
+    }
+  });
+
   const { activeWhs, activeCusts, activePipes } = filterByPeriod(whs, custs, pipes, currentPeriod);
   const whNames = Object.keys(activeWhs);
   const sorted  = sortWarehousesTopological(whNames, activePipes);
@@ -93,6 +101,13 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
   });
 
   // ── Phase 2: Process outbounds (topological order, direct before indirect) ─
+  // Pre-compute per-customer demand once so multiple supplying warehouses draw
+  // from the same remaining-demand pool rather than each seeing the full demand.
+  const remainingDemand = {};
+  Object.keys(activeCusts).forEach((name) => {
+    remainingDemand[name] = getCustomerRequestedQty(activeCusts[name]);
+  });
+
   sorted.forEach((name) => {
     const wh = activeWhs[name];
 
@@ -106,13 +121,18 @@ export function advancePeriodLogic({ warehouses, customers, pipes, currentPeriod
     const directPipes   = shuffle(direct);
     const indirectPipes = shuffle(indirect);
 
-    // Direct outbounds first — backorder carries over to next period
+    // Direct outbounds first — backorder carries over to next period.
+    // remainingDemand is shared across all warehouses serving the same customer
+    // so each warehouse only ships what the customer still needs.
     directPipes.forEach((conn) => {
-      const cust          = activeCusts[conn.to];
-      const totalDemand = getCustomerRequestedQty(cust);
-      const shipped       = Math.min(totalDemand, Math.max(0, wh.currentStock));
-      const shortage      = totalDemand - shipped;
+      const cust      = activeCusts[conn.to];
+      const remaining = remainingDemand[conn.to] ?? 0;
+      if (remaining <= 0) return;
 
+      const shipped  = Math.min(remaining, Math.max(0, wh.currentStock));
+      const shortage = remaining - shipped;
+
+      remainingDemand[conn.to]   = shortage;
       wh.currentStock            -= shipped;
       cust.backorder              = shortage;
       metrics[name].directServed += shipped;
@@ -187,7 +207,12 @@ export function goBackPeriodLogic({ warehouses, customers, currentPeriod }) {
     const hist = whs[name].history;
     if (!hist || hist.length === 0) return;
     const h = hist.pop();
-    whs[name].currentStock = h.opening;
+    // If no history remains we've rewound past the first simulated period —
+    // use initialStock as the authoritative starting stock so corrupted
+    // h.opening values (from the old stale-backorder bug) don't persist.
+    whs[name].currentStock = hist.length === 0
+      ? (whs[name].initialStock ?? h.opening)
+      : h.opening;
     whs[name].inTransit    = h.inTransitSnapshot ?? [];
   });
 
